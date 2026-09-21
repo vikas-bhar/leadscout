@@ -6,6 +6,8 @@ import { getCreditBalance, estimateSearchesRemaining } from "@/lib/credits";
 import { Card } from "@/components/ui/card";
 import { LowCreditWarning } from "@/components/credits/LowCreditWarning";
 
+export const dynamic = "force-dynamic";
+
 export default async function DashboardPage() {
   const user = await getAuthenticatedUser();
   if (!user) redirect("/login");
@@ -13,7 +15,7 @@ export default async function DashboardPage() {
   const supabase = createSupabaseServerClient();
   let balance = null;
   try {
-    balance = await getCreditBalance(user.id);
+    balance = await getCreditBalance(user.id, supabase);
   } catch (error) {
     console.log("dashboard credit balance error", error);
   }

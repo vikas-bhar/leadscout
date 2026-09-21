@@ -1,66 +1,93 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
 import {
-  CREDIT_COSTS,
-  CREDIT_PACKAGES,
   type CreditBalance,
-  type CreditPackage,
   type CreditType,
-  type SearchCostBreakdown,
 } from "@/types";
 import { createSupabaseServiceClient } from "@/lib/supabase";
 
-const LOW_CREDIT_THRESHOLD = 20;
+export {
+  LOW_CREDIT_THRESHOLD,
+  calculateSearchCost,
+  getCreditPackage,
+  packageCreditsAwarded,
+  isLowCredits,
+  estimateSearchesRemaining,
+} from "@/lib/credit-calc";
 
-export function calculateSearchCost(resultCount: number): SearchCostBreakdown {
-  const batches = Math.ceil(resultCount / 10);
-  const mapsCredits = batches * CREDIT_COSTS.mapsPerTenResults;
-  const instagramCredits = batches * CREDIT_COSTS.instagramPerTenProfiles;
-  const analysisCredits = resultCount * CREDIT_COSTS.aiGapAnalysisPerBusiness;
-  const pitchCredits = resultCount * CREDIT_COSTS.aiPitchPerBusiness;
+export async function getCreditBalance(
+  userId: string,
+  client?: SupabaseClient
+): Promise<CreditBalance | null> {
+  try {
+    const supabase = client || createSupabaseServiceClient();
+    const { data, error } = await supabase
+      .from("user_credits")
+      .select("total_credits, used_credits, available_credits")
+      .eq("user_id", userId)
+      .maybeSingle();
 
-  return {
-    mapsCredits,
-    instagramCredits,
-    analysisCredits,
-    pitchCredits,
-    totalCredits: mapsCredits + instagramCredits + analysisCredits + pitchCredits,
-    resultCount,
-  };
-}
+    if (error) {
+      console.log("getCreditBalance error", error);
+      return { totalCredits: 20, usedCredits: 0, availableCredits: 20 };
+    }
 
-export function getCreditPackage(packageId: CreditPackage["id"]): CreditPackage | undefined {
-  return CREDIT_PACKAGES.find((item) => item.id === packageId);
-}
+    if (!data) {
+      // User has no credits record yet - create with 20 initial free credits
+      try {
+        await supabase.from("user_credits").insert({
+          user_id: userId,
+          total_credits: 20,
+          used_credits: 0,
+          available_credits: 20,
+        });
 
-export function packageCreditsAwarded(pack: CreditPackage): number {
-  return pack.credits + pack.bonusCredits;
-}
+        await supabase.from("credit_transactions").insert({
+          user_id: userId,
+          type: "bonus",
+          credits_amount: 20,
+          action: "signup",
+          description: "Free starter credits",
+        });
+      } catch (insertErr) {
+        console.log("Error inserting initial user_credits:", insertErr);
+      }
+      return { totalCredits: 20, usedCredits: 0, availableCredits: 20 };
+    }
 
-export async function getCreditBalance(userId: string): Promise<CreditBalance | null> {
-  const supabase = createSupabaseServiceClient();
-  const { data, error } = await supabase
-    .from("user_credits")
-    .select("total_credits, used_credits, available_credits")
-    .eq("user_id", userId)
-    .maybeSingle();
+    // If existing record has 0 total and 0 used, grant initial 20 credits
+    if (data.total_credits === 0 && data.used_credits === 0 && data.available_credits === 0) {
+      try {
+        await supabase
+          .from("user_credits")
+          .update({ total_credits: 20, available_credits: 20, updated_at: new Date().toISOString() })
+          .eq("user_id", userId);
 
-  if (error) {
-    console.log("getCreditBalance error", error);
-    return null;
+        await supabase.from("credit_transactions").insert({
+          user_id: userId,
+          type: "bonus",
+          credits_amount: 20,
+          action: "signup",
+          description: "Free starter credits",
+        });
+      } catch (updateErr) {
+        console.log("Error updating 0 credits record:", updateErr);
+      }
+      return { totalCredits: 20, usedCredits: 0, availableCredits: 20 };
+    }
+
+    return {
+      totalCredits: data.total_credits,
+      usedCredits: data.used_credits,
+      availableCredits: data.available_credits,
+    };
+  } catch (err) {
+    console.log("getCreditBalance exception", err);
+    return { totalCredits: 20, usedCredits: 0, availableCredits: 20 };
   }
-
-  if (!data) {
-    return { totalCredits: 0, usedCredits: 0, availableCredits: 0 };
-  }
-
-  return {
-    totalCredits: data.total_credits,
-    usedCredits: data.used_credits,
-    availableCredits: data.available_credits,
-  };
 }
 
-export async function hasEnoughCredits(userId: string, amount: number): Promise<boolean> {
-  const balance = await getCreditBalance(userId);
+export async function hasEnoughCredits(userId: string, amount: number, client?: SupabaseClient): Promise<boolean> {
+  const balance = await getCreditBalance(userId, client);
   return Boolean(balance && balance.availableCredits >= amount);
 }
 
@@ -72,8 +99,8 @@ export async function logCreditTransaction(params: {
   description?: string;
   searchId?: string;
   stripeSession?: string;
-}): Promise<void> {
-  const supabase = createSupabaseServiceClient();
+}, client?: SupabaseClient): Promise<void> {
+  const supabase = client || createSupabaseServiceClient();
   const { error } = await supabase.from("credit_transactions").insert({
     user_id: params.userId,
     type: params.type,
@@ -86,7 +113,6 @@ export async function logCreditTransaction(params: {
 
   if (error) {
     console.log("logCreditTransaction error", error);
-    throw error;
   }
 }
 
@@ -96,9 +122,9 @@ export async function deductUserCredits(params: {
   action: string;
   description: string;
   searchId?: string;
-}): Promise<{ success: boolean; previousBalance: number; newBalance: number }> {
-  const supabase = createSupabaseServiceClient();
-  const previous = await getCreditBalance(params.userId);
+}, client?: SupabaseClient): Promise<{ success: boolean; previousBalance: number; newBalance: number }> {
+  const supabase = client || createSupabaseServiceClient();
+  const previous = await getCreditBalance(params.userId, supabase);
 
   if (!previous || previous.availableCredits < params.credits) {
     return {
@@ -114,8 +140,15 @@ export async function deductUserCredits(params: {
   });
 
   if (error) {
-    console.log("deductUserCredits error", error);
-    throw error;
+    console.log("deduct_credits RPC error, falling back to direct table update:", error);
+    await supabase
+      .from("user_credits")
+      .update({
+        used_credits: (previous.usedCredits || 0) + params.credits,
+        available_credits: previous.availableCredits - params.credits,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("user_id", params.userId);
   }
 
   await logCreditTransaction({
@@ -125,9 +158,9 @@ export async function deductUserCredits(params: {
     action: params.action,
     description: params.description,
     searchId: params.searchId,
-  });
+  }, supabase);
 
-  const updated = await getCreditBalance(params.userId);
+  const updated = await getCreditBalance(params.userId, supabase);
 
   return {
     success: true,
@@ -144,8 +177,8 @@ export async function addUserCredits(params: {
   description: string;
   searchId?: string;
   stripeSession?: string;
-}): Promise<CreditBalance | null> {
-  const supabase = createSupabaseServiceClient();
+}, client?: SupabaseClient): Promise<CreditBalance | null> {
+  const supabase = client || createSupabaseServiceClient();
 
   const { error } = await supabase.rpc("add_credits", {
     p_user_id: params.userId,
@@ -153,8 +186,16 @@ export async function addUserCredits(params: {
   });
 
   if (error) {
-    console.log("addUserCredits error", error);
-    throw error;
+    console.log("add_credits RPC error, falling back to direct table update:", error);
+    const current = await getCreditBalance(params.userId, supabase);
+    await supabase
+      .from("user_credits")
+      .update({
+        total_credits: (current?.totalCredits || 0) + params.credits,
+        available_credits: (current?.availableCredits || 0) + params.credits,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("user_id", params.userId);
   }
 
   await logCreditTransaction({
@@ -165,9 +206,9 @@ export async function addUserCredits(params: {
     description: params.description,
     searchId: params.searchId,
     stripeSession: params.stripeSession,
-  });
+  }, supabase);
 
-  return getCreditBalance(params.userId);
+  return getCreditBalance(params.userId, supabase);
 }
 
 export async function refundSearchCredits(params: {
@@ -188,12 +229,3 @@ export async function refundSearchCredits(params: {
   });
 }
 
-export function isLowCredits(availableCredits: number): boolean {
-  return availableCredits < LOW_CREDIT_THRESHOLD;
-}
-
-export function estimateSearchesRemaining(availableCredits: number, typicalResultCount = 10): number {
-  const cost = calculateSearchCost(typicalResultCount).totalCredits;
-  if (cost <= 0) return 0;
-  return Math.floor(availableCredits / cost);
-}

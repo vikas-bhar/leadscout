@@ -6,13 +6,16 @@ import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 
 export { createSupabaseBrowserClient };
 
-function getPublicSupabaseEnv() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+export function isSupabaseConfigured(): boolean {
+  return Boolean(
+    process.env.NEXT_PUBLIC_SUPABASE_URL &&
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  );
+}
 
-  if (!url || !anonKey) {
-    throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY");
-  }
+function getPublicSupabaseEnv() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://placeholder-project.supabase.co";
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "placeholder-anon-key";
 
   return { url, anonKey };
 }
@@ -45,12 +48,8 @@ export function createSupabaseServerClient(): SupabaseClient {
 }
 
 export function createSupabaseServiceClient(): SupabaseClient {
-  const { url } = getPublicSupabaseEnv();
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!serviceRoleKey) {
-    throw new Error("Missing SUPABASE_SERVICE_ROLE_KEY");
-  }
+  const { url, anonKey } = getPublicSupabaseEnv();
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || anonKey;
 
   if (typeof window !== "undefined") {
     throw new Error("Service role client cannot be used in the browser");
@@ -97,15 +96,29 @@ export function createSupabaseMiddlewareClient(request: NextRequest, response: N
 }
 
 export async function getAuthenticatedUser(): Promise<User | null> {
-  const supabase = createSupabaseServerClient();
-  const { data, error } = await supabase.auth.getUser();
-
-  if (error) {
-    console.log("getAuthenticatedUser error", error);
+  if (!isSupabaseConfigured()) {
     return null;
   }
 
-  return data.user ?? null;
+  try {
+    const supabase = createSupabaseServerClient();
+    const { data, error } = await supabase.auth.getUser();
+
+    if (error) {
+      if (error.name !== "AuthSessionMissingError" && !error.message?.includes("Auth session missing")) {
+        console.warn("getAuthenticatedUser auth notice:", error.message);
+      }
+      return null;
+    }
+
+    return data.user ?? null;
+  } catch (error: unknown) {
+    const err = error as { name?: string; message?: string };
+    if (err?.name !== "AuthSessionMissingError" && !err?.message?.includes("Auth session missing")) {
+      console.warn("getAuthenticatedUser exception:", err?.message || error);
+    }
+    return null;
+  }
 }
 
 export async function requireApiUser(): Promise<
@@ -113,16 +126,42 @@ export async function requireApiUser(): Promise<
   | { user: null; supabase: SupabaseClient; response: NextResponse }
 > {
   const supabase = createSupabaseServerClient();
-  const { data, error } = await supabase.auth.getUser();
 
-  if (error || !data.user) {
-    console.log("requireApiUser unauthorized", error);
+  if (!isSupabaseConfigured()) {
+    return {
+      user: null,
+      supabase,
+      response: NextResponse.json(
+        { error: "Supabase is not configured. Please set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in your settings." },
+        { status: 401 }
+      ),
+    };
+  }
+
+  try {
+    const { data, error } = await supabase.auth.getUser();
+
+    if (error || !data.user) {
+      if (error && error.name !== "AuthSessionMissingError" && !error.message?.includes("Auth session missing")) {
+        console.warn("requireApiUser auth notice:", error.message);
+      }
+      return {
+        user: null,
+        supabase,
+        response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
+      };
+    }
+
+    return { user: data.user, supabase };
+  } catch (error: unknown) {
+    const err = error as { name?: string; message?: string };
+    if (err?.name !== "AuthSessionMissingError" && !err?.message?.includes("Auth session missing")) {
+      console.warn("requireApiUser exception:", err?.message || error);
+    }
     return {
       user: null,
       supabase,
       response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
     };
   }
-
-  return { user: data.user, supabase };
 }

@@ -1,8 +1,23 @@
-export default function LeadsPage() {
-  return (
-    <div className="space-y-2">
-      <h1 className="text-2xl font-medium">Leads</h1>
-      <p className="text-sm text-muted-foreground">No leads yet. Run a search after Phase 4 is enabled.</p>
-    </div>
-  );
+import { redirect } from "next/navigation";
+import { getAuthenticatedUser, createSupabaseServerClient } from "@/lib/supabase";
+import { LeadsView } from "./LeadsView";
+
+export const dynamic = "force-dynamic";
+
+export default async function LeadsPage() {
+  const user = await getAuthenticatedUser();
+  if (!user) redirect("/login");
+
+  const supabase = createSupabaseServerClient();
+  const { data: leads, error } = await supabase
+    .from("leads")
+    .select("*")
+    .eq("user_id", user.id)
+    .order("opportunity_score", { ascending: false });
+
+  if (error) {
+    console.log("Error loading leads in LeadsPage:", error);
+  }
+
+  return <LeadsView initialLeads={leads || []} />;
 }

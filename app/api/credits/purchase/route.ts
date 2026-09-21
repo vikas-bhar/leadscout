@@ -21,6 +21,14 @@ export async function POST(request: NextRequest) {
     }
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+    
+    if (!process.env.STRIPE_SECRET_KEY) {
+      return NextResponse.json(
+        { error: "Stripe is not configured yet. Please configure STRIPE_SECRET_KEY in settings to enable live checkout." },
+        { status: 400 }
+      );
+    }
+
     const stripe = getStripe();
     const credits = packageCreditsAwarded(pack);
 

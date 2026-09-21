@@ -37,6 +37,15 @@ DROP POLICY IF EXISTS "Users own transactions" ON credit_transactions;
 CREATE POLICY "Users own transactions" ON credit_transactions
   FOR ALL USING (auth.uid() = user_id);
 
+-- Allow authenticated and service_role to insert/read credits safely
+DROP POLICY IF EXISTS "Users can insert own credits" ON user_credits;
+CREATE POLICY "Users can insert own credits" ON user_credits
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can insert own transactions" ON credit_transactions;
+CREATE POLICY "Users can insert own transactions" ON credit_transactions
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
+
 CREATE OR REPLACE FUNCTION add_credits(p_user_id UUID, p_credits INT)
 RETURNS void AS $$
 BEGIN
@@ -64,31 +73,55 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 REVOKE ALL ON FUNCTION add_credits(UUID, INT) FROM PUBLIC;
 REVOKE ALL ON FUNCTION deduct_credits(UUID, INT) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION add_credits(UUID, INT) TO service_role;
-GRANT EXECUTE ON FUNCTION deduct_credits(UUID, INT) TO service_role;
+GRANT EXECUTE ON FUNCTION add_credits(UUID, INT) TO service_role, authenticated;
+GRANT EXECUTE ON FUNCTION deduct_credits(UUID, INT) TO service_role, authenticated;
 
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
+DECLARE
+  v_user_id UUID := NEW.id;
+  v_email TEXT := NEW.email;
+  v_name TEXT := COALESCE(NEW.raw_user_meta_data->>'full_name', split_part(NEW.email, '@', 1));
+  v_avatar TEXT := COALESCE(NEW.raw_user_meta_data->>'avatar_url', NULL);
 BEGIN
+  -- 1. Ensure user profile exists
   INSERT INTO public.users (id, email, full_name, avatar_url)
-  VALUES (
-    NEW.id,
-    NEW.email,
-    COALESCE(NEW.raw_user_meta_data->>'full_name', NULL),
-    COALESCE(NEW.raw_user_meta_data->>'avatar_url', NULL)
-  )
-  ON CONFLICT (id) DO NOTHING;
+  VALUES (v_user_id, v_email, v_name, v_avatar)
+  ON CONFLICT (id) DO UPDATE SET
+    email = EXCLUDED.email,
+    full_name = COALESCE(EXCLUDED.full_name, public.users.full_name),
+    avatar_url = COALESCE(EXCLUDED.avatar_url, public.users.avatar_url),
+    updated_at = NOW();
 
+  -- 2. Give 20 initial free credits on signup
   INSERT INTO public.user_credits (user_id, total_credits, used_credits, available_credits)
-  VALUES (NEW.id, 20, 0, 20)
-  ON CONFLICT (user_id) DO NOTHING;
+  VALUES (v_user_id, 20, 0, 20)
+  ON CONFLICT (user_id) DO UPDATE SET
+    total_credits = CASE WHEN public.user_credits.total_credits = 0 THEN 20 ELSE public.user_credits.total_credits END,
+    available_credits = CASE WHEN public.user_credits.available_credits = 0 AND public.user_credits.used_credits = 0 THEN 20 ELSE public.user_credits.available_credits END,
+    updated_at = NOW();
 
-  INSERT INTO public.credit_transactions (user_id, type, credits_amount, action, description)
-  VALUES (NEW.id, 'bonus', 20, 'signup', 'Free starter credits');
+  -- 3. Log signup transaction if not already logged
+  IF NOT EXISTS (
+    SELECT 1 FROM public.credit_transactions 
+    WHERE user_id = v_user_id AND action = 'signup'
+  ) THEN
+    INSERT INTO public.credit_transactions (user_id, type, credits_amount, action, description)
+    VALUES (v_user_id, 'bonus', 20, 'signup', 'Free starter credits');
+  END IF;
 
+  RETURN NEW;
+EXCEPTION WHEN OTHERS THEN
+  RAISE WARNING 'handle_new_user encountered error: %', SQLERRM;
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+-- Grant permissions for trigger execution
+GRANT ALL ON TABLE public.users TO postgres, service_role;
+GRANT ALL ON TABLE public.user_credits TO postgres, service_role;
+GRANT ALL ON TABLE public.credit_transactions TO postgres, service_role;
+GRANT EXECUTE ON FUNCTION public.handle_new_user() TO postgres, service_role;
 
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created

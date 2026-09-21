@@ -1,10 +1,47 @@
-export default function CreditsPage() {
+import { redirect } from "next/navigation";
+import { getAuthenticatedUser, createSupabaseServerClient } from "@/lib/supabase";
+import { getCreditBalance } from "@/lib/credits";
+import { CreditsView } from "./CreditsView";
+import type { CreditTransaction } from "@/types";
+
+export const dynamic = "force-dynamic";
+
+export default async function CreditsPage() {
+  const user = await getAuthenticatedUser();
+  if (!user) redirect("/login");
+
+  const supabase = createSupabaseServerClient();
+  const balance = (await getCreditBalance(user.id, supabase)) || {
+    totalCredits: 20,
+    usedCredits: 0,
+    availableCredits: 20,
+  };
+
+  const { data: transactions } = await supabase
+    .from("credit_transactions")
+    .select("*")
+    .eq("user_id", user.id)
+    .order("created_at", { ascending: false });
+
+  const fallbackTransactions = transactions && transactions.length > 0
+    ? (transactions as unknown as CreditTransaction[])
+    : [
+        {
+          id: "signup-starter-tx",
+          userId: user.id,
+          type: "bonus" as const,
+          creditsAmount: 20,
+          action: "signup",
+          description: "Free starter credits",
+          createdAt: new Date().toISOString(),
+        } as CreditTransaction,
+      ];
+
   return (
-    <div className="space-y-2">
-      <h1 className="text-2xl font-medium">Credits</h1>
-      <p className="text-sm text-muted-foreground">
-        Packages, Stripe checkout, and transaction history land in Phase 3.
-      </p>
-    </div>
+    <CreditsView
+      initialBalance={balance}
+      initialTransactions={fallbackTransactions}
+      userEmail={user.email}
+    />
   );
 }

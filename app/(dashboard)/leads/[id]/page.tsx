@@ -1,4 +1,4 @@
-import { notFound, redirect } from "next/navigation";
+import { redirect } from "next/navigation";
 import { getAuthenticatedUser, createSupabaseServerClient } from "@/lib/supabase";
 import { LeadDetailView } from "./LeadDetailView";
 
@@ -12,22 +12,24 @@ export default async function LeadDetailPage({ params }: LeadDetailPageProps) {
   const user = await getAuthenticatedUser();
   if (!user) redirect("/login");
 
-  const supabase = createSupabaseServerClient();
-  const { data: lead, error } = await supabase
-    .from("leads")
-    .select("*")
-    .eq("id", params.id)
-    .eq("user_id", user.id)
-    .maybeSingle();
+  let lead = null;
+  try {
+    const supabase = createSupabaseServerClient();
+    const { data, error } = await supabase
+      .from("leads")
+      .select("*")
+      .eq("id", params.id)
+      .eq("user_id", user.id)
+      .maybeSingle();
 
-  if (error || !lead) {
-    notFound();
+    if (!error && data) {
+      lead = data;
+    }
+  } catch (err) {
+    console.log("Supabase error fetching lead:", err);
   }
 
-  // Auto-mark new leads as viewed
-  if (lead.status === "new") {
-    await supabase.from("leads").update({ status: "viewed" }).eq("id", lead.id);
-  }
-
-  return <LeadDetailView initialLead={lead} />;
+  // If not found in Supabase or Supabase is not connected, pass placeholder with id to client component
+  // which will resolve it from local-store
+  return <LeadDetailView initialLead={lead || { id: params.id }} />;
 }

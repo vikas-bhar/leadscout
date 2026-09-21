@@ -132,6 +132,20 @@ export async function POST(request: NextRequest) {
       resultsCount: generatedLeads.length,
       creditsUsed: cost.totalCredits,
       newBalance: deduction.newBalance,
+      leads: generatedLeads,
+      search: {
+        id: searchId,
+        user_id: auth.user.id,
+        location: parsed.location,
+        business_type: parsed.businessCategory,
+        freelancer_type: parsed.freelancerType,
+        status: "completed",
+        progress: 100,
+        progress_message: "Search completed successfully",
+        results_count: parsed.resultCount,
+        credits_used: cost.totalCredits,
+        created_at: new Date().toISOString(),
+      },
     });
   } catch (error) {
     console.log("POST /api/search/start exception", error);

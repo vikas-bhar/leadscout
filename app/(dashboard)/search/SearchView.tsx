@@ -22,6 +22,7 @@ import {
   type FreelancerType,
 } from "@/types";
 import { calculateSearchCost } from "@/lib/credit-calc";
+import { saveLocalLeads, saveLocalSearch, deductLocalCredits } from "@/lib/local-store";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
@@ -110,6 +111,19 @@ export function SearchView({
       if (!response.ok) {
         throw new Error(data.error || "Failed to complete search");
       }
+
+      // Persist in local storage for instant availability and resilience
+      if (Array.isArray(data.leads) && data.leads.length > 0) {
+        saveLocalLeads(data.leads);
+      }
+      if (data.search) {
+        saveLocalSearch(data.search);
+      }
+      deductLocalCredits(
+        cost.totalCredits,
+        `Search for ${businessCategory} in ${location.trim()} (${resultCount} results)`,
+        data.searchId
+      );
 
       // Finish progress animation
       setProgressPercent(100);

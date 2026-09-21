@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -25,56 +25,76 @@ import { UrgencyBadge } from "@/components/ui/UrgencyBadge";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { getLocalLeadById, updateLocalLead } from "@/lib/local-store";
 
 interface LeadDetailViewProps {
   initialLead: Record<string, unknown>;
 }
 
 export function LeadDetailView({ initialLead }: LeadDetailViewProps) {
+  const [leadData, setLeadData] = useState<Record<string, unknown>>(initialLead);
+
+  useEffect(() => {
+    // If initialLead only has id or minimal info, hydrate from local-store
+    if (!initialLead.business_name && !initialLead.businessName) {
+      const local = getLocalLeadById(initialLead.id as string);
+      if (local) {
+        setLeadData(local as unknown as Record<string, unknown>);
+      }
+    }
+  }, [initialLead]);
+
   // Normalize snake_case / camelCase
   const lead: Lead = {
-    id: initialLead.id as string,
-    searchId: (initialLead.searchId ?? initialLead.search_id) as string,
-    userId: (initialLead.userId ?? initialLead.user_id) as string,
-    rank: Number(initialLead.rank ?? 1),
-    businessName: (initialLead.businessName ?? initialLead.business_name ?? "Unnamed Business") as string,
-    businessCategory: (initialLead.businessCategory ?? initialLead.business_category ?? "Local Business") as string,
-    location: (initialLead.location ?? "") as string,
-    googleRating: Number(initialLead.googleRating ?? initialLead.google_rating ?? 4.5),
-    reviewCount: Number(initialLead.reviewCount ?? initialLead.review_count ?? 0),
-    hasWebsite: Boolean(initialLead.hasWebsite ?? initialLead.has_website ?? false),
-    websiteUrl: (initialLead.websiteUrl ?? initialLead.website_url ?? null) as string | null,
-    phone: (initialLead.phone ?? null) as string | null,
-    photoCount: Number(initialLead.photoCount ?? initialLead.photo_count ?? 0),
-    mapsUrl: (initialLead.mapsUrl ?? initialLead.maps_url ?? null) as string | null,
-    instagramHandle: (initialLead.instagramHandle ?? initialLead.instagram_handle ?? null) as string | null,
-    instagramFollowers: (initialLead.instagramFollowers ?? initialLead.instagram_followers ?? null) as number | null,
-    instagramFollowing: (initialLead.instagramFollowing ?? initialLead.instagram_following ?? null) as number | null,
-    instagramPosts: (initialLead.instagramPosts ?? initialLead.instagram_posts ?? null) as number | null,
-    lastPostDate: (initialLead.lastPostDate ?? initialLead.last_post_date ?? null) as string | null,
-    engagementRate: (initialLead.engagementRate ?? initialLead.engagement_rate ?? null) as number | null,
-    hasLinkInBio: Boolean(initialLead.hasLinkInBio ?? initialLead.has_link_in_bio ?? false),
-    usesReels: Boolean(initialLead.usesReels ?? initialLead.uses_reels ?? false),
-    opportunityScore: Number(initialLead.opportunityScore ?? initialLead.opportunity_score ?? 70),
-    urgencyLevel: (initialLead.urgencyLevel ?? initialLead.urgency_level ?? "medium") as UrgencyLevel,
-    gapsFound: (initialLead.gapsFound ?? initialLead.gaps_found ?? []) as Gap[],
-    bestService: (initialLead.bestService ?? initialLead.best_service ?? "Digital presence overhaul") as string,
-    secondaryServices: (initialLead.secondaryServices ?? initialLead.secondary_services ?? []) as string[],
-    buyingSignals: (initialLead.buyingSignals ?? initialLead.buying_signals ?? []) as string[],
-    pitches: ((initialLead.pitches as PitchBundle | undefined) ?? {
+    id: leadData.id as string,
+    searchId: (leadData.searchId ?? leadData.search_id) as string,
+    userId: (leadData.userId ?? leadData.user_id) as string,
+    rank: Number(leadData.rank ?? 1),
+    businessName: (leadData.businessName ?? leadData.business_name ?? "Unnamed Business") as string,
+    businessCategory: (leadData.businessCategory ?? leadData.business_category ?? "Local Business") as string,
+    location: (leadData.location ?? "") as string,
+    googleRating: Number(leadData.googleRating ?? leadData.google_rating ?? 4.5),
+    reviewCount: Number(leadData.reviewCount ?? leadData.review_count ?? 0),
+    hasWebsite: Boolean(leadData.hasWebsite ?? leadData.has_website ?? false),
+    websiteUrl: (leadData.websiteUrl ?? leadData.website_url ?? null) as string | null,
+    phone: (leadData.phone ?? null) as string | null,
+    photoCount: Number(leadData.photoCount ?? leadData.photo_count ?? 0),
+    mapsUrl: (leadData.mapsUrl ?? leadData.maps_url ?? null) as string | null,
+    instagramHandle: (leadData.instagramHandle ?? leadData.instagram_handle ?? null) as string | null,
+    instagramFollowers: (leadData.instagramFollowers ?? leadData.instagram_followers ?? null) as number | null,
+    instagramFollowing: (leadData.instagramFollowing ?? leadData.instagram_following ?? null) as number | null,
+    instagramPosts: (leadData.instagramPosts ?? leadData.instagram_posts ?? null) as number | null,
+    lastPostDate: (leadData.lastPostDate ?? leadData.last_post_date ?? null) as string | null,
+    engagementRate: (leadData.engagementRate ?? leadData.engagement_rate ?? null) as number | null,
+    hasLinkInBio: Boolean(leadData.hasLinkInBio ?? leadData.has_link_in_bio ?? false),
+    usesReels: Boolean(leadData.usesReels ?? leadData.uses_reels ?? false),
+    opportunityScore: Number(leadData.opportunityScore ?? leadData.opportunity_score ?? 70),
+    urgencyLevel: (leadData.urgencyLevel ?? leadData.urgency_level ?? "medium") as UrgencyLevel,
+    gapsFound: (leadData.gapsFound ?? leadData.gaps_found ?? []) as Gap[],
+    bestService: (leadData.bestService ?? leadData.best_service ?? "Digital presence overhaul") as string,
+    secondaryServices: (leadData.secondaryServices ?? leadData.secondary_services ?? []) as string[],
+    buyingSignals: (leadData.buyingSignals ?? leadData.buying_signals ?? []) as string[],
+    pitches: ((leadData.pitches as PitchBundle | undefined) ?? {
       pitches: [],
       followUpMessage: "Following up on my note last week — would love to connect!",
       pitchTips: ["Keep it conversational", "Reference their specific location"],
     }) as PitchBundle,
-    estimatedBudget: (initialLead.estimatedBudget ?? initialLead.estimated_budget ?? "$1,000 – $2,500") as string,
-    status: (initialLead.status ?? "new") as Lead["status"],
-    notes: (initialLead.notes ?? "") as string,
-    contactedAt: (initialLead.contactedAt ?? initialLead.contacted_at ?? null) as string | null,
-    createdAt: (initialLead.createdAt ?? initialLead.created_at ?? new Date().toISOString()) as string,
+    estimatedBudget: (leadData.estimatedBudget ?? leadData.estimated_budget ?? "$1,000 – $2,500") as string,
+    status: (leadData.status ?? "new") as Lead["status"],
+    notes: (leadData.notes ?? "") as string,
+    contactedAt: (leadData.contactedAt ?? leadData.contacted_at ?? null) as string | null,
+    createdAt: (leadData.createdAt ?? leadData.created_at ?? new Date().toISOString()) as string,
   };
 
   const [status, setStatus] = useState<string>(lead.status);
   const [notes, setNotes] = useState<string>(lead.notes || "");
+
+  // Sync state if leadData changed from local-store
+  useEffect(() => {
+    if (leadData.status) setStatus(leadData.status as string);
+    if (leadData.notes !== undefined) setNotes((leadData.notes as string) || "");
+  }, [leadData]);
+
   const [isSavingNotes, setIsSavingNotes] = useState(false);
   const [selectedPitchStyle, setSelectedPitchStyle] = useState<PitchStyle>("instagram_dm");
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
@@ -85,8 +105,12 @@ export function LeadDetailView({ initialLead }: LeadDetailViewProps) {
 
   async function handleUpdateStatus(newStatus: string) {
     setStatus(newStatus);
+    updateLocalLead(lead.id, {
+      status: newStatus as Lead["status"],
+      contactedAt: newStatus === "contacted" ? new Date().toISOString() : lead.contactedAt,
+    });
     try {
-      const res = await fetch(`/api/leads/${lead.id}`, {
+      await fetch(`/api/leads/${lead.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -94,27 +118,26 @@ export function LeadDetailView({ initialLead }: LeadDetailViewProps) {
           contacted: newStatus === "contacted",
         }),
       });
-      if (!res.ok) throw new Error("Failed to update status");
-      toast.success(`Lead marked as ${newStatus}`);
     } catch {
-      toast.error("Failed to update lead status");
+      // Offline/local fallback already updated
     }
+    toast.success(`Lead marked as ${newStatus}`);
   }
 
   async function handleSaveNotes() {
     setIsSavingNotes(true);
+    updateLocalLead(lead.id, { notes });
     try {
-      const res = await fetch(`/api/leads/${lead.id}`, {
+      await fetch(`/api/leads/${lead.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ notes }),
       });
-      if (!res.ok) throw new Error("Failed to save notes");
-      toast.success("Notes saved successfully");
     } catch {
-      toast.error("Failed to save notes");
+      // Offline/local fallback already updated
     } finally {
       setIsSavingNotes(false);
+      toast.success("Notes saved successfully");
     }
   }
 

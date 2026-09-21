@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Coins, Check, History } from "lucide-react";
 import { toast } from "sonner";
 import { CREDIT_COSTS, type CreditBalance, type CreditTransaction } from "@/types";
@@ -8,6 +8,7 @@ import { estimateSearchesRemaining } from "@/lib/credit-calc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { getLocalBalance, getLocalTransactions } from "@/lib/local-store";
 
 interface CreditsViewProps {
   initialBalance: CreditBalance;
@@ -19,9 +20,32 @@ export function CreditsView({
   initialBalance,
   initialTransactions,
 }: CreditsViewProps) {
-  const [balance] = useState<CreditBalance>(initialBalance);
-  const [transactions] = useState<CreditTransaction[]>(initialTransactions);
+  const [balance, setBalance] = useState<CreditBalance>(initialBalance);
+  const [transactions, setTransactions] = useState<CreditTransaction[]>(initialTransactions);
   const [purchasingId, setPurchasingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    function sync() {
+      const localBal = getLocalBalance();
+      const localTx = getLocalTransactions();
+      if (localBal) {
+        setBalance(localBal);
+      }
+      if (localTx && localTx.length > 0) {
+        setTransactions(localTx);
+      }
+    }
+
+    sync();
+
+    window.addEventListener("freelancefind_store_updated", sync);
+    window.addEventListener("storage", sync);
+
+    return () => {
+      window.removeEventListener("freelancefind_store_updated", sync);
+      window.removeEventListener("storage", sync);
+    };
+  }, []);
 
   const available = balance.availableCredits ?? 20;
   const total = Math.max(balance.totalCredits ?? 20, available);

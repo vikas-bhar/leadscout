@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import {
   Search,
@@ -20,18 +20,31 @@ import { UrgencyBadge } from "@/components/ui/UrgencyBadge";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { getLocalLeads } from "@/lib/local-store";
 
 interface LeadsViewProps {
   initialLeads: Lead[];
 }
 
 export function LeadsView({ initialLeads }: LeadsViewProps) {
+  const [leadsList, setLeadsList] = useState<Lead[]>(initialLeads);
   const [filterTier, setFilterTier] = useState<"all" | "high" | "medium" | "low">("all");
   const [searchQuery, setSearchQuery] = useState("");
 
+  useEffect(() => {
+    if (initialLeads.length > 0) {
+      setLeadsList(initialLeads);
+    } else {
+      const local = getLocalLeads();
+      if (local && local.length > 0) {
+        setLeadsList(local);
+      }
+    }
+  }, [initialLeads]);
+
   // Normalize leads (handling potential snake_case from DB)
   const normalizedLeads = useMemo(() => {
-    return initialLeads.map((itemRaw) => {
+    return leadsList.map((itemRaw) => {
       const item = itemRaw as unknown as Record<string, unknown>;
       return {
         id: item.id as string,
@@ -74,7 +87,7 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
         createdAt: (item.createdAt ?? item.created_at ?? new Date().toISOString()) as string,
       } as Lead;
     });
-  }, [initialLeads]);
+  }, [leadsList]);
 
   // Summary counts
   const highCount = normalizedLeads.filter(

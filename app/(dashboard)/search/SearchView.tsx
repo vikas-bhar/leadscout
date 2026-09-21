@@ -352,40 +352,40 @@ export function SearchView({
             </div>
 
             <div className="mt-4 space-y-3 text-xs">
-              <div className="flex items-center justify-between text-neutral-600">
-                <span>Google Maps discovery</span>
-                <span className="font-medium text-neutral-900">{cost.mapsCredits} credits</span>
+              <div className="flex items-center justify-between text-neutral-600 gap-3">
+                <span className="truncate">Google Maps discovery</span>
+                <span className="font-medium text-neutral-900 shrink-0 whitespace-nowrap">{cost.mapsCredits} credits</span>
               </div>
-              <div className="flex items-center justify-between text-neutral-600">
-                <span>Instagram profile scraping</span>
-                <span className="font-medium text-neutral-900">{cost.instagramCredits} credits</span>
+              <div className="flex items-center justify-between text-neutral-600 gap-3">
+                <span className="truncate">Instagram profile scraping</span>
+                <span className="font-medium text-neutral-900 shrink-0 whitespace-nowrap">{cost.instagramCredits} credits</span>
               </div>
-              <div className="flex items-center justify-between text-neutral-600">
-                <span>AI digital gap analysis ({resultCount}x)</span>
-                <span className="font-medium text-neutral-900">{cost.analysisCredits} credits</span>
+              <div className="flex items-center justify-between text-neutral-600 gap-3">
+                <span className="truncate">AI digital gap analysis ({resultCount}x)</span>
+                <span className="font-medium text-neutral-900 shrink-0 whitespace-nowrap">{cost.analysisCredits} credits</span>
               </div>
-              <div className="flex items-center justify-between text-neutral-600">
-                <span>AI personalized pitches ({resultCount}x)</span>
-                <span className="font-medium text-neutral-900">{cost.pitchCredits} credits</span>
+              <div className="flex items-center justify-between text-neutral-600 gap-3">
+                <span className="truncate">AI personalized pitches ({resultCount}x)</span>
+                <span className="font-medium text-neutral-900 shrink-0 whitespace-nowrap">{cost.pitchCredits} credits</span>
               </div>
 
               <div className="my-3 border-t border-neutral-100" />
 
-              <div className="flex items-center justify-between text-sm font-semibold">
+              <div className="flex items-center justify-between text-sm font-semibold gap-3">
                 <span className="text-neutral-900">Total Credits Required</span>
-                <span className="text-primary text-base">{cost.totalCredits} credits</span>
+                <span className="text-primary text-base shrink-0 whitespace-nowrap">{cost.totalCredits} credits</span>
               </div>
 
               <div className="rounded-lg bg-neutral-50 border border-neutral-100 p-3 mt-4 space-y-1.5">
-                <div className="flex justify-between text-xs text-neutral-600">
+                <div className="flex justify-between text-xs text-neutral-600 gap-3">
                   <span>Your current balance:</span>
-                  <span className="font-semibold text-neutral-900">{availableCredits} credits</span>
+                  <span className="font-semibold text-neutral-900 shrink-0 whitespace-nowrap">{availableCredits} credits</span>
                 </div>
-                <div className="flex justify-between text-xs text-neutral-600">
+                <div className="flex justify-between text-xs text-neutral-600 gap-3">
                   <span>Balance after search:</span>
                   <span
                     className={cn(
-                      "font-semibold",
+                      "font-semibold shrink-0 whitespace-nowrap",
                       hasEnough ? "text-emerald-700" : "text-red-600"
                     )}
                   >

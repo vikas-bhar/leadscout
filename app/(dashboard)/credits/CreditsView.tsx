@@ -294,9 +294,9 @@ export function CreditsView({
         <CardContent>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             <div className="p-3.5 rounded-lg border border-neutral-100 bg-neutral-50/60">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2">
                 <span className="text-xs font-medium text-neutral-800">Google Maps Scraping</span>
-                <span className="text-xs font-semibold px-2 py-0.5 rounded bg-white border border-neutral-200 text-neutral-700">
+                <span className="text-xs font-semibold px-2 py-0.5 rounded bg-white border border-neutral-200 text-neutral-700 shrink-0 whitespace-nowrap">
                   {CREDIT_COSTS.mapsPerTenResults} credits
                 </span>
               </div>
@@ -304,9 +304,9 @@ export function CreditsView({
             </div>
 
             <div className="p-3.5 rounded-lg border border-neutral-100 bg-neutral-50/60">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2">
                 <span className="text-xs font-medium text-neutral-800">Instagram Profile Scrape</span>
-                <span className="text-xs font-semibold px-2 py-0.5 rounded bg-white border border-neutral-200 text-neutral-700">
+                <span className="text-xs font-semibold px-2 py-0.5 rounded bg-white border border-neutral-200 text-neutral-700 shrink-0 whitespace-nowrap">
                   {CREDIT_COSTS.instagramPerTenProfiles} credits
                 </span>
               </div>
@@ -314,29 +314,29 @@ export function CreditsView({
             </div>
 
             <div className="p-3.5 rounded-lg border border-neutral-100 bg-neutral-50/60">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2">
                 <span className="text-xs font-medium text-neutral-800">AI Gap Analysis</span>
-                <span className="text-xs font-semibold px-2 py-0.5 rounded bg-white border border-neutral-200 text-neutral-700">
-                  {CREDIT_COSTS.aiGapAnalysisPerBusiness} credit
+                <span className="text-xs font-semibold px-2 py-0.5 rounded bg-white border border-neutral-200 text-neutral-700 shrink-0 whitespace-nowrap">
+                  5 credits (10x)
                 </span>
               </div>
-              <p className="mt-1 text-xs text-muted-foreground">Per analyzed business opportunity</p>
+              <p className="mt-1 text-xs text-muted-foreground">Per 10 analyzed opportunities (0.5 credit each)</p>
             </div>
 
             <div className="p-3.5 rounded-lg border border-neutral-100 bg-neutral-50/60">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2">
                 <span className="text-xs font-medium text-neutral-800">AI Pitch Generation</span>
-                <span className="text-xs font-semibold px-2 py-0.5 rounded bg-white border border-neutral-200 text-neutral-700">
-                  {CREDIT_COSTS.aiPitchPerBusiness} credit
+                <span className="text-xs font-semibold px-2 py-0.5 rounded bg-white border border-neutral-200 text-neutral-700 shrink-0 whitespace-nowrap">
+                  5 credits (10x)
                 </span>
               </div>
-              <p className="mt-1 text-xs text-muted-foreground">Per tailored pitch bundle (DM/Email)</p>
+              <p className="mt-1 text-xs text-muted-foreground">Per 10 tailored pitch bundles (0.5 credit each)</p>
             </div>
 
             <div className="p-3.5 rounded-lg border border-neutral-100 bg-neutral-50/60">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2">
                 <span className="text-xs font-medium text-neutral-800">CSV Export</span>
-                <span className="text-xs font-semibold px-2 py-0.5 rounded bg-white border border-neutral-200 text-neutral-700">
+                <span className="text-xs font-semibold px-2 py-0.5 rounded bg-white border border-neutral-200 text-neutral-700 shrink-0 whitespace-nowrap">
                   {CREDIT_COSTS.csvExport} credits
                 </span>
               </div>

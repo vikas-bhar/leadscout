@@ -276,8 +276,8 @@ export interface EnrichedBusiness extends MapsBusiness {
 export const CREDIT_COSTS = {
   mapsPerTenResults: 2,
   instagramPerTenProfiles: 3,
-  aiGapAnalysisPerBusiness: 1,
-  aiPitchPerBusiness: 1,
+  aiGapAnalysisPerBusiness: 0.5,
+  aiPitchPerBusiness: 0.5,
   csvExport: 2,
 } as const;
 

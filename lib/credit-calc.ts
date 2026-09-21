@@ -11,8 +11,8 @@ export function calculateSearchCost(resultCount: number): SearchCostBreakdown {
   const batches = Math.ceil(resultCount / 10);
   const mapsCredits = batches * CREDIT_COSTS.mapsPerTenResults;
   const instagramCredits = batches * CREDIT_COSTS.instagramPerTenProfiles;
-  const analysisCredits = resultCount * CREDIT_COSTS.aiGapAnalysisPerBusiness;
-  const pitchCredits = resultCount * CREDIT_COSTS.aiPitchPerBusiness;
+  const analysisCredits = Math.round(resultCount * CREDIT_COSTS.aiGapAnalysisPerBusiness);
+  const pitchCredits = Math.round(resultCount * CREDIT_COSTS.aiPitchPerBusiness);
 
   return {
     mapsCredits,

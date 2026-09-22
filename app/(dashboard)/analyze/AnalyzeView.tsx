@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import {
   Link as LinkIcon,
@@ -17,7 +17,7 @@ import {
 import { toast } from "sonner";
 import { detectLinkType } from "@/lib/analyzer/detectLink";
 import { AnalysisResult } from "@/components/analyzer/AnalysisResult";
-import { deductLocalCredits } from "@/lib/local-store";
+import { deductLocalCredits, saveLocalLeads, getLocalBalance } from "@/lib/local-store";
 import { type AnalyzerResultData, type Lead, CREDIT_COSTS } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -39,6 +39,22 @@ export function AnalyzeView({ initialAvailableCredits }: AnalyzeViewProps) {
   const [error, setError] = useState<string | null>(null);
   const [analysisData, setAnalysisData] = useState<AnalyzerResultData | null>(null);
   const [leadData, setLeadData] = useState<Lead | undefined>(undefined);
+
+  useEffect(() => {
+    function sync() {
+      const bal = getLocalBalance();
+      if (bal && typeof bal.availableCredits === "number") {
+        setAvailableCredits(bal.availableCredits);
+      }
+    }
+    sync();
+    window.addEventListener("freelancefind_store_updated", sync);
+    window.addEventListener("storage", sync);
+    return () => {
+      window.removeEventListener("freelancefind_store_updated", sync);
+      window.removeEventListener("storage", sync);
+    };
+  }, []);
 
   const cost = CREDIT_COSTS.analyze_link || 5;
   const hasEnoughCredits = availableCredits >= cost;
@@ -95,6 +111,10 @@ export function AnalyzeView({ initialAvailableCredits }: AnalyzeViewProps) {
 
       setAnalysisData(data.analysis);
       setLeadData(data.lead);
+
+      if (data.lead) {
+        saveLocalLeads([data.lead]);
+      }
 
       if (typeof data.newBalance === "number") {
         setAvailableCredits(data.newBalance);

@@ -131,6 +131,7 @@ export async function POST(request: NextRequest) {
 
     // Map to DB snake_case columns
     const dbLeads = generatedLeads.map((l) => ({
+      id: l.id,
       search_id: searchId,
       user_id: auth.user.id,
       rank: l.rank,
@@ -163,6 +164,7 @@ export async function POST(request: NextRequest) {
       status: l.status,
       notes: l.notes,
       contacted_at: l.contactedAt,
+      created_at: l.createdAt,
     }));
 
     try {

@@ -113,6 +113,74 @@ export function deductLocalCredits(amount: number, description: string, searchId
   return { success: true, newBalance: newAvailable };
 }
 
+export function setLocalBalance(balance: CreditBalance) {
+  const store = getStore();
+  store.balance = {
+    totalCredits: balance.totalCredits ?? 20,
+    usedCredits: balance.usedCredits ?? 0,
+    availableCredits: balance.availableCredits ?? 20,
+  };
+  saveStore(store);
+}
+
+export function addLocalCredits(
+  amount: number,
+  description: string,
+  type: "purchase" | "bonus" | "refund" = "purchase"
+): { success: boolean; newBalance: number } {
+  const store = getStore();
+  const currentTotal = store.balance.totalCredits ?? 20;
+  const currentAvailable = store.balance.availableCredits ?? 20;
+
+  const newTotal = currentTotal + amount;
+  const newAvailable = currentAvailable + amount;
+
+  store.balance = {
+    totalCredits: newTotal,
+    usedCredits: store.balance.usedCredits ?? 0,
+    availableCredits: newAvailable,
+  };
+
+  store.transactions.unshift({
+    id: `tx_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+    userId: "demo-user-id",
+    type,
+    creditsAmount: amount,
+    action: type === "purchase" ? "topup" : "bonus",
+    description,
+    searchId: null,
+    stripeSession: null,
+    createdAt: new Date().toISOString(),
+  });
+
+  saveStore(store);
+  return { success: true, newBalance: newAvailable };
+}
+
+export function resetLocalStarterCredits(): { success: boolean; newBalance: number } {
+  const store = getStore();
+  store.balance = {
+    totalCredits: Math.max(20, store.balance.totalCredits ?? 20),
+    usedCredits: store.balance.usedCredits ?? 0,
+    availableCredits: (store.balance.availableCredits ?? 0) + 20,
+  };
+
+  store.transactions.unshift({
+    id: `tx_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+    userId: "demo-user-id",
+    type: "bonus",
+    creditsAmount: 20,
+    action: "claim_free",
+    description: "Free starter recharge (20 credits)",
+    searchId: null,
+    stripeSession: null,
+    createdAt: new Date().toISOString(),
+  });
+
+  saveStore(store);
+  return { success: true, newBalance: store.balance.availableCredits };
+}
+
 export function getLocalTransactions(): CreditTransaction[] {
   return getStore().transactions;
 }
@@ -128,14 +196,51 @@ export function saveLocalSearch(search: StoredSearch) {
 }
 
 export function getLocalLeads(): Lead[] {
-  return getStore().leads;
+  const store = getStore();
+  let modified = false;
+
+  // Sanitize any corrupt/undefined IDs in memory/localStorage
+  const sanitized = store.leads.map((lead, idx) => {
+    if (!lead.id || lead.id === "undefined" || lead.id === "null") {
+      modified = true;
+      const cleanName = (lead.businessName || "prospect").toLowerCase().replace(/[^a-z0-9]/g, "");
+      return {
+        ...lead,
+        id: `lead_${cleanName}_${idx + 1}_${Math.random().toString(36).slice(2, 6)}`,
+      };
+    }
+    return lead;
+  });
+
+  if (modified) {
+    store.leads = sanitized;
+    saveStore(store);
+  }
+
+  return store.leads;
 }
 
 export function saveLocalLeads(newLeads: Lead[]) {
   const store = getStore();
+
+  const sanitizedNew = newLeads.map((lead, idx) => {
+    const raw = lead as unknown as Record<string, unknown>;
+    const leadId = (raw.id || raw._id) as string;
+    const finalId =
+      leadId && leadId !== "undefined" && leadId !== "null"
+        ? leadId
+        : `lead_${Date.now()}_${idx + 1}_${Math.random().toString(36).slice(2, 6)}`;
+
+    return {
+      ...lead,
+      id: finalId,
+      createdAt: lead.createdAt || new Date().toISOString(),
+    } as Lead;
+  });
+
   // Filter out any duplicates by ID and prepend new leads
-  const newIds = new Set(newLeads.map((l) => l.id));
-  store.leads = [...newLeads, ...store.leads.filter((l) => !newIds.has(l.id))];
+  const newIds = new Set(sanitizedNew.map((l) => l.id));
+  store.leads = [...sanitizedNew, ...store.leads.filter((l) => l.id && !newIds.has(l.id))];
   saveStore(store);
 }
 
@@ -154,6 +259,14 @@ export function updateLocalLead(id: string, updates: Partial<Lead>): Lead | null
 }
 
 export function getLocalLeadById(id: string): Lead | null {
-  const store = getStore();
-  return store.leads.find((l) => l.id === id) ?? null;
+  const leads = getLocalLeads();
+  if (!id || id === "undefined" || id === "null") {
+    return leads[0] ?? null;
+  }
+  const found = leads.find((l) => l.id === id);
+  if (found) return found;
+
+  // Try fuzzy match by businessName or return first lead
+  const byName = leads.find((l) => l.businessName?.toLowerCase() === id.toLowerCase());
+  return byName ?? leads[0] ?? null;
 }

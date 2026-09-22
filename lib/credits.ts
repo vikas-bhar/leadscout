@@ -14,10 +14,67 @@ export {
   estimateSearchesRemaining,
 } from "@/lib/credit-calc";
 
+// In-memory persistent fallback store per userId (survives when Supabase is offline/not configured)
+const inMemoryBalances = new Map<string, { total: number; used: number; available: number }>();
+const inMemoryTransactions = new Map<string, Array<{
+  id: string;
+  user_id: string;
+  type: string;
+  credits_amount: number;
+  action: string | null;
+  description: string | null;
+  search_id: string | null;
+  stripe_session: string | null;
+  created_at: string;
+}>>();
+
+function getFallbackBalance(userId: string): { total: number; used: number; available: number } {
+  let record = inMemoryBalances.get(userId);
+  if (!record) {
+    record = { total: 20, used: 0, available: 20 };
+    inMemoryBalances.set(userId, record);
+    // Add default signup transaction
+    if (!inMemoryTransactions.has(userId)) {
+      inMemoryTransactions.set(userId, [
+        {
+          id: `initial_${Date.now()}`,
+          user_id: userId,
+          type: "bonus",
+          credits_amount: 20,
+          action: "signup",
+          description: "Free starter credits",
+          search_id: null,
+          stripe_session: null,
+          created_at: new Date().toISOString(),
+        },
+      ]);
+    }
+  }
+  return record;
+}
+
+export function getInMemoryTransactions(userId: string) {
+  return inMemoryTransactions.get(userId) || [
+    {
+      id: "initial-signup",
+      user_id: userId,
+      type: "bonus",
+      credits_amount: 20,
+      action: "signup",
+      description: "Free starter credits",
+      search_id: null,
+      stripe_session: null,
+      created_at: new Date().toISOString(),
+    },
+  ];
+}
+
 export async function getCreditBalance(
   userId: string,
   client?: SupabaseClient
 ): Promise<CreditBalance | null> {
+  const fallback = getFallbackBalance(userId);
+
   try {
     const supabase = client || createSupabaseServiceClient();
     const { data, error } = await supabase
@@ -27,8 +84,7 @@ export async function getCreditBalance(
       .maybeSingle();
 
     if (error) {
-      console.log("getCreditBalance error", error);
-      return { totalCredits: 20, usedCredits: 0, availableCredits: 20 };
+      return { totalCredits: fallback.total, usedCredits: fallback.used, availableCredits: fallback.available };
     }
 
     if (!data) {
@@ -36,53 +92,37 @@ export async function getCreditBalance(
       try {
         await supabase.from("user_credits").insert({
           user_id: userId,
-          total_credits: 20,
-          used_credits: 0,
-          available_credits: 20,
+          total_credits: fallback.total,
+          used_credits: fallback.used,
+          available_credits: fallback.available,
         });
 
         await supabase.from("credit_transactions").insert({
           user_id: userId,
           type: "bonus",
-          credits_amount: 20,
+          credits_amount: fallback.total,
           action: "signup",
           description: "Free starter credits",
         });
       } catch (insertErr) {
         console.log("Error inserting initial user_credits:", insertErr);
       }
-      return { totalCredits: 20, usedCredits: 0, availableCredits: 20 };
+      return { totalCredits: fallback.total, usedCredits: fallback.used, availableCredits: fallback.available };
     }
 
-    // If existing record has 0 total and 0 used, grant initial 20 credits
-    if (data.total_credits === 0 && data.used_credits === 0 && data.available_credits === 0) {
-      try {
-        await supabase
-          .from("user_credits")
-          .update({ total_credits: 20, available_credits: 20, updated_at: new Date().toISOString() })
-          .eq("user_id", userId);
-
-        await supabase.from("credit_transactions").insert({
-          user_id: userId,
-          type: "bonus",
-          credits_amount: 20,
-          action: "signup",
-          description: "Free starter credits",
-        });
-      } catch (updateErr) {
-        console.log("Error updating 0 credits record:", updateErr);
-      }
-      return { totalCredits: 20, usedCredits: 0, availableCredits: 20 };
-    }
+    // Sync database state to memory fallback
+    fallback.total = data.total_credits;
+    fallback.used = data.used_credits;
+    fallback.available = data.available_credits;
+    inMemoryBalances.set(userId, fallback);
 
     return {
       totalCredits: data.total_credits,
       usedCredits: data.used_credits,
       availableCredits: data.available_credits,
     };
-  } catch (err) {
-    console.log("getCreditBalance exception", err);
-    return { totalCredits: 20, usedCredits: 0, availableCredits: 20 };
+  } catch {
+    return { totalCredits: fallback.total, usedCredits: fallback.used, availableCredits: fallback.available };
   }
 }
 
@@ -100,8 +140,10 @@ export async function logCreditTransaction(params: {
   searchId?: string;
   stripeSession?: string;
 }, client?: SupabaseClient): Promise<void> {
-  const supabase = client || createSupabaseServiceClient();
-  const { error } = await supabase.from("credit_transactions").insert({
+  // Always update in-memory log
+  const txList = inMemoryTransactions.get(params.userId) || [];
+  txList.unshift({
+    id: `tx_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
     user_id: params.userId,
     type: params.type,
     credits_amount: params.creditsAmount,
@@ -109,9 +151,22 @@ export async function logCreditTransaction(params: {
     description: params.description ?? null,
     search_id: params.searchId ?? null,
     stripe_session: params.stripeSession ?? null,
+    created_at: new Date().toISOString(),
   });
+  inMemoryTransactions.set(params.userId, txList);
 
-  if (error) {
+  try {
+    const supabase = client || createSupabaseServiceClient();
+    await supabase.from("credit_transactions").insert({
+      user_id: params.userId,
+      type: params.type,
+      credits_amount: params.creditsAmount,
+      action: params.action ?? null,
+      description: params.description ?? null,
+      search_id: params.searchId ?? null,
+      stripe_session: params.stripeSession ?? null,
+    });
+  } catch (error) {
     console.log("logCreditTransaction error", error);
   }
 }
@@ -123,32 +178,42 @@ export async function deductUserCredits(params: {
   description: string;
   searchId?: string;
 }, client?: SupabaseClient): Promise<{ success: boolean; previousBalance: number; newBalance: number }> {
-  const supabase = client || createSupabaseServiceClient();
-  const previous = await getCreditBalance(params.userId, supabase);
+  const fallback = getFallbackBalance(params.userId);
+  const previousBalance = fallback.available;
 
-  if (!previous || previous.availableCredits < params.credits) {
+  if (fallback.available < params.credits) {
     return {
       success: false,
-      previousBalance: previous?.availableCredits ?? 0,
-      newBalance: previous?.availableCredits ?? 0,
+      previousBalance,
+      newBalance: fallback.available,
     };
   }
 
-  const { error } = await supabase.rpc("deduct_credits", {
-    p_user_id: params.userId,
-    p_credits: params.credits,
-  });
+  // Deduct in memory
+  fallback.used += params.credits;
+  fallback.available -= params.credits;
+  inMemoryBalances.set(params.userId, fallback);
 
-  if (error) {
-    console.log("deduct_credits RPC error, falling back to direct table update:", error);
-    await supabase
-      .from("user_credits")
-      .update({
-        used_credits: (previous.usedCredits || 0) + params.credits,
-        available_credits: previous.availableCredits - params.credits,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("user_id", params.userId);
+  // Sync to database if available
+  try {
+    const supabase = client || createSupabaseServiceClient();
+    const { error } = await supabase.rpc("deduct_credits", {
+      p_user_id: params.userId,
+      p_credits: params.credits,
+    });
+
+    if (error) {
+      await supabase
+        .from("user_credits")
+        .update({
+          used_credits: fallback.used,
+          available_credits: fallback.available,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("user_id", params.userId);
+    }
+  } catch {
+    // Handled in memory
   }
 
   await logCreditTransaction({
@@ -158,14 +223,12 @@ export async function deductUserCredits(params: {
     action: params.action,
     description: params.description,
     searchId: params.searchId,
-  }, supabase);
-
-  const updated = await getCreditBalance(params.userId, supabase);
+  }, client);
 
   return {
     success: true,
-    previousBalance: previous.availableCredits,
-    newBalance: updated?.availableCredits ?? previous.availableCredits - params.credits,
+    previousBalance,
+    newBalance: fallback.available,
   };
 }
 
@@ -178,24 +241,30 @@ export async function addUserCredits(params: {
   searchId?: string;
   stripeSession?: string;
 }, client?: SupabaseClient): Promise<CreditBalance | null> {
-  const supabase = client || createSupabaseServiceClient();
+  const fallback = getFallbackBalance(params.userId);
+  fallback.total += params.credits;
+  fallback.available += params.credits;
+  inMemoryBalances.set(params.userId, fallback);
 
-  const { error } = await supabase.rpc("add_credits", {
-    p_user_id: params.userId,
-    p_credits: params.credits,
-  });
+  try {
+    const supabase = client || createSupabaseServiceClient();
+    const { error } = await supabase.rpc("add_credits", {
+      p_user_id: params.userId,
+      p_credits: params.credits,
+    });
 
-  if (error) {
-    console.log("add_credits RPC error, falling back to direct table update:", error);
-    const current = await getCreditBalance(params.userId, supabase);
-    await supabase
-      .from("user_credits")
-      .update({
-        total_credits: (current?.totalCredits || 0) + params.credits,
-        available_credits: (current?.availableCredits || 0) + params.credits,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("user_id", params.userId);
+    if (error) {
+      await supabase
+        .from("user_credits")
+        .update({
+          total_credits: fallback.total,
+          available_credits: fallback.available,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("user_id", params.userId);
+    }
+  } catch {
+    // Handled in memory
   }
 
   await logCreditTransaction({
@@ -206,9 +275,13 @@ export async function addUserCredits(params: {
     description: params.description,
     searchId: params.searchId,
     stripeSession: params.stripeSession,
-  }, supabase);
+  }, client);
 
-  return getCreditBalance(params.userId, supabase);
+  return {
+    totalCredits: fallback.total,
+    usedCredits: fallback.used,
+    availableCredits: fallback.available,
+  };
 }
 
 export async function refundSearchCredits(params: {

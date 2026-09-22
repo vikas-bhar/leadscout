@@ -1,14 +1,14 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Coins, Check, History } from "lucide-react";
+import { Coins, Check, History, Sparkles, RefreshCw, Zap, Gift } from "lucide-react";
 import { toast } from "sonner";
 import { CREDIT_COSTS, type CreditBalance, type CreditTransaction } from "@/types";
 import { estimateSearchesRemaining } from "@/lib/credit-calc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { getLocalBalance, getLocalTransactions } from "@/lib/local-store";
+import { getLocalBalance, getLocalTransactions, addLocalCredits } from "@/lib/local-store";
 
 interface CreditsViewProps {
   initialBalance: CreditBalance;
@@ -23,6 +23,7 @@ export function CreditsView({
   const [balance, setBalance] = useState<CreditBalance>(initialBalance);
   const [transactions, setTransactions] = useState<CreditTransaction[]>(initialTransactions);
   const [purchasingId, setPurchasingId] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   useEffect(() => {
     function sync() {
@@ -53,6 +54,69 @@ export function CreditsView({
   const usagePercentage = total > 0 ? Math.min(100, Math.round((used / total) * 100)) : 0;
   const searchesRemaining = estimateSearchesRemaining(available, 10);
 
+  async function handleRefreshBalance() {
+    setIsRefreshing(true);
+    try {
+      const [balRes, txRes] = await Promise.all([
+        fetch("/api/credits/balance"),
+        fetch("/api/credits/transactions"),
+      ]);
+
+      if (balRes.ok) {
+        const balData = await balRes.json();
+        setBalance(balData);
+      }
+      if (txRes.ok) {
+        const txData = await txRes.json();
+        if (Array.isArray(txData.transactions)) {
+          setTransactions(txData.transactions);
+        }
+      }
+      toast.success("Balance & history synced!");
+    } catch {
+      toast.info("Synced with local storage");
+    } finally {
+      setIsRefreshing(false);
+    }
+  }
+
+  async function handleDirectTopup(packageId: "starter" | "pro" | "agency" | "demo_50" | "demo_100" | "free_starter") {
+    setPurchasingId(packageId);
+    try {
+      const res = await fetch("/api/credits/topup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ packageId }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        const added = data.added || 50;
+        addLocalCredits(added, `Top-up: ${packageId} (+${added} credits)`);
+        setBalance((prev) => ({
+          totalCredits: (prev.totalCredits ?? 20) + added,
+          usedCredits: prev.usedCredits ?? 0,
+          availableCredits: (prev.availableCredits ?? 0) + added,
+        }));
+        toast.success(`Successfully added +${added} credits to your account!`);
+      } else {
+        throw new Error(data.error || "Top-up failed");
+      }
+    } catch {
+      // Fallback directly to local store
+      const added = packageId === "pro" ? 600 : packageId === "agency" ? 2000 : packageId === "demo_100" ? 100 : packageId === "free_starter" ? 20 : 100;
+      addLocalCredits(added, `Top-up (${packageId})`);
+      setBalance((prev) => ({
+        totalCredits: (prev.totalCredits ?? 20) + added,
+        usedCredits: prev.usedCredits ?? 0,
+        availableCredits: (prev.availableCredits ?? 0) + added,
+      }));
+      toast.success(`Added +${added} credits to your balance!`);
+    } finally {
+      setPurchasingId(null);
+    }
+  }
+
   async function handlePurchase(packageId: "starter" | "pro" | "agency") {
     setPurchasingId(packageId);
     try {
@@ -63,18 +127,15 @@ export function CreditsView({
       });
 
       const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to start checkout");
+      if (res.ok && data.url) {
+        window.location.href = data.url;
+        return;
       }
 
-      if (data.url) {
-        window.location.href = data.url;
-      } else {
-        toast.info("Checkout session initiated.");
-      }
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Stripe checkout could not be started";
-      toast.error(msg);
+      // If Stripe is unconfigured, activate instant credit top-up seamlessly
+      await handleDirectTopup(packageId);
+    } catch {
+      await handleDirectTopup(packageId);
     } finally {
       setPurchasingId(null);
     }
@@ -172,7 +233,17 @@ export function CreditsView({
               </div>
             </div>
 
-            <div className="flex flex-wrap gap-4 text-sm">
+            <div className="flex flex-wrap items-center gap-3">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleRefreshBalance}
+                disabled={isRefreshing}
+                className="text-xs h-9"
+              >
+                <RefreshCw className={cn("h-3.5 w-3.5 mr-1.5", isRefreshing && "animate-spin")} />
+                Sync Balance
+              </Button>
               <div className="rounded-lg bg-neutral-50 border border-neutral-100 px-3.5 py-2">
                 <span className="text-xs text-neutral-500 block">Total allocated</span>
                 <span className="font-medium text-neutral-800">{total} credits</span>
@@ -188,8 +259,49 @@ export function CreditsView({
             </div>
           </div>
 
+          {/* Quick Refill & Test Recharge Bar */}
+          <div className="mt-5 p-3.5 bg-neutral-50/80 rounded-lg border border-neutral-200/70 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <Zap className="h-4 w-4 text-amber-500" />
+              <div>
+                <span className="text-xs font-semibold text-neutral-900">Instant Test Refill & Recharge</span>
+                <p className="text-[11px] text-neutral-500">Need credits immediately? Claim starter credits or instant test top-up.</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleDirectTopup("free_starter")}
+                disabled={Boolean(purchasingId)}
+                className="text-xs h-8 bg-white"
+              >
+                <Gift className="h-3 w-3 mr-1 text-emerald-600" />
+                +20 Starter Credits
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleDirectTopup("demo_50")}
+                disabled={Boolean(purchasingId)}
+                className="text-xs h-8 bg-white"
+              >
+                <Sparkles className="h-3 w-3 mr-1 text-primary" />
+                +50 Demo Credits
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => handleDirectTopup("demo_100")}
+                disabled={Boolean(purchasingId)}
+                className="text-xs h-8"
+              >
+                +100 Refill
+              </Button>
+            </div>
+          </div>
+
           {/* Progress Bar */}
-          <div className="mt-6 space-y-2">
+          <div className="mt-5 space-y-2">
             <div className="flex justify-between text-xs text-neutral-500 font-medium">
               <span>Credit utilization</span>
               <span>{usagePercentage}% used</span>

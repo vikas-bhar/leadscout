@@ -126,7 +126,7 @@ export function generateMockLeads({
   place?: string;
   city?: string;
   country?: string;
-}): Array<Omit<Lead, "id" | "createdAt">> {
+}): Lead[] {
   const primaryArea = place?.trim() || city?.trim() || location.split(",")[0]?.trim() || "Metro";
   const baseNames = CATEGORY_NAMES[businessCategory] || [
     `${primaryArea} Premier ${businessCategory}`,
@@ -136,12 +136,13 @@ export function generateMockLeads({
     `Metro ${businessCategory} Group`,
   ];
 
-  const results: Array<Omit<Lead, "id" | "createdAt">> = [];
+  const results: Lead[] = [];
 
   for (let i = 0; i < count; i++) {
     const rawName = baseNames[i % baseNames.length];
     const suffix = i >= baseNames.length ? ` #${Math.floor(i / baseNames.length) + 1}` : "";
     const businessName = `${rawName}${suffix}`;
+    const cleanId = `lead_${searchId || "gen"}_${i + 1}_${Math.random().toString(36).slice(2, 8)}`;
     const handle = businessName
       .toLowerCase()
       .replace(/[^a-z0-9]/g, "")
@@ -289,6 +290,7 @@ export function generateMockLeads({
     };
 
     results.push({
+      id: cleanId,
       searchId,
       userId,
       rank: i + 1,
@@ -301,7 +303,7 @@ export function generateMockLeads({
       websiteUrl: hasWebsite ? `https://www.${handle}.com` : null,
       phone: `(${300 + (i * 17) % 600}) 555-${1000 + (i * 83) % 8999}`,
       photoCount: 12 + (i * 7) % 85,
-      mapsUrl: `https://maps.google.com/?q=${encodeURIComponent(businessName + " " + location)}`,
+      mapsUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${businessName}, ${location}`)}`,
       instagramHandle: hasInstagram ? `@${handle}` : null,
       instagramFollowers: hasInstagram ? 450 + (i * 320) % 9400 : null,
       instagramFollowing: hasInstagram ? 280 + (i * 55) % 1200 : null,
@@ -333,6 +335,7 @@ export function generateMockLeads({
           ? ["Follow-up needed", "Cold"]
           : ["Cold"],
       contactedAt: null,
+      createdAt: new Date().toISOString(),
     });
   }
 

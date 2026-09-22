@@ -77,9 +77,18 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
 
   // Normalize leads (handling potential snake_case from DB)
   const normalizedLeads: Lead[] = useMemo(() => {
-    return leadsList.map((itemRaw) => {
+    return leadsList.map((itemRaw, index) => {
       const item = itemRaw as unknown as Record<string, unknown>;
       const oppScore = Number(item.opportunityScore ?? item.opportunity_score ?? 70);
+
+      const rawId = (item.id ?? item._id) as string;
+      const cleanBizName = (item.businessName ?? item.business_name ?? `Lead #${index + 1}`) as string;
+      const cleanLoc = (item.location ?? "") as string;
+
+      const safeId =
+        rawId && rawId !== "undefined" && rawId !== "null"
+          ? String(rawId)
+          : `lead_${cleanBizName.toLowerCase().replace(/[^a-z0-9]/g, "")}_${index + 1}`;
 
       // Extract or generate default tags
       let tags: string[] = [];
@@ -96,21 +105,27 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
         tags = oppScore >= 80 ? ["Hot"] : oppScore >= 68 ? ["Warm"] : ["Cold"];
       }
 
+      const rawMaps = (item.mapsUrl ?? item.maps_url ?? null) as string | null;
+      const validMapsUrl =
+        rawMaps && !rawMaps.includes("Unnamed%20Business")
+          ? rawMaps
+          : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${cleanBizName}, ${cleanLoc}`)}`;
+
       return {
-        id: item.id as string,
-        searchId: (item.searchId ?? item.search_id) as string,
-        userId: (item.userId ?? item.user_id) as string,
-        rank: Number(item.rank ?? 1),
-        businessName: (item.businessName ?? item.business_name ?? "Unnamed Business") as string,
+        id: safeId,
+        searchId: (item.searchId ?? item.search_id ?? "search-default") as string,
+        userId: (item.userId ?? item.user_id ?? "user-default") as string,
+        rank: Number(item.rank ?? index + 1),
+        businessName: cleanBizName,
         businessCategory: (item.businessCategory ?? item.business_category ?? "Local Business") as string,
-        location: (item.location ?? "") as string,
+        location: cleanLoc,
         googleRating: Number(item.googleRating ?? item.google_rating ?? 4.5),
         reviewCount: Number(item.reviewCount ?? item.review_count ?? 0),
         hasWebsite: Boolean(item.hasWebsite ?? item.has_website ?? false),
         websiteUrl: (item.websiteUrl ?? item.website_url ?? null) as string | null,
         phone: (item.phone ?? null) as string | null,
         photoCount: Number(item.photoCount ?? item.photo_count ?? 0),
-        mapsUrl: (item.mapsUrl ?? item.maps_url ?? null) as string | null,
+        mapsUrl: validMapsUrl,
         instagramHandle: (item.instagramHandle ?? item.instagram_handle ?? null) as string | null,
         instagramFollowers: (item.instagramFollowers ?? item.instagram_followers ?? null) as number | null,
         instagramFollowing: (item.instagramFollowing ?? item.instagram_following ?? null) as number | null,
@@ -183,21 +198,37 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
     setCustomTagInput("");
   }
 
-  // Summary counts
-  const highCount = normalizedLeads.filter(
-    (l) => l.opportunityScore >= 75 || l.urgencyLevel === "high" || l.urgencyLevel === "critical"
-  ).length;
-  const mediumCount = normalizedLeads.filter(
-    (l) => l.opportunityScore >= 65 && l.opportunityScore < 75
-  ).length;
-  const lowCount = normalizedLeads.filter((l) => l.opportunityScore < 65).length;
+  // Summary counts with synchronized tier criteria
+  const highCount = useMemo(() => {
+    return normalizedLeads.filter(
+      (l) => l.opportunityScore >= 75 || l.urgencyLevel === "high" || l.urgencyLevel === "critical"
+    ).length;
+  }, [normalizedLeads]);
 
-  // Compute available tags and their counts
+  const mediumCount = useMemo(() => {
+    return normalizedLeads.filter(
+      (l) => (l.opportunityScore >= 65 && l.opportunityScore < 75) || (l.urgencyLevel === "medium" && l.opportunityScore < 75)
+    ).length;
+  }, [normalizedLeads]);
+
+  const lowCount = useMemo(() => {
+    return normalizedLeads.filter(
+      (l) => l.opportunityScore < 65 && l.urgencyLevel !== "high" && l.urgencyLevel !== "critical"
+    ).length;
+  }, [normalizedLeads]);
+
+  // Compute all available tags (presets + custom tags on leads) and their counts
   const tagCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     normalizedLeads.forEach((l) => {
       (l.tags || []).forEach((t) => {
-        counts[t] = (counts[t] || 0) + 1;
+        const clean = t.trim();
+        if (clean) {
+          // Find matching key case-insensitively or set
+          const existingKey = Object.keys(counts).find((k) => k.toLowerCase() === clean.toLowerCase());
+          const key = existingKey || clean;
+          counts[key] = (counts[key] || 0) + 1;
+        }
       });
     });
     return counts;
@@ -207,28 +238,52 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
   const filteredLeads = useMemo(() => {
     return normalizedLeads
       .filter((l) => {
-        if (filterTier === "high") return l.opportunityScore >= 75;
-        if (filterTier === "medium") return l.opportunityScore >= 65 && l.opportunityScore < 75;
-        if (filterTier === "low") return l.opportunityScore < 65;
+        if (filterTier === "high") {
+          return l.opportunityScore >= 75 || l.urgencyLevel === "high" || l.urgencyLevel === "critical";
+        }
+        if (filterTier === "medium") {
+          return (l.opportunityScore >= 65 && l.opportunityScore < 75) || (l.urgencyLevel === "medium" && l.opportunityScore < 75);
+        }
+        if (filterTier === "low") {
+          return l.opportunityScore < 65 && l.urgencyLevel !== "high" && l.urgencyLevel !== "critical";
+        }
         return true;
       })
       .filter((l) => {
         if (selectedTag === "all") return true;
-        return (l.tags || []).includes(selectedTag);
+        return (l.tags || []).some(
+          (t) => t.trim().toLowerCase() === selectedTag.trim().toLowerCase()
+        );
       })
       .filter((l) => {
         if (!searchQuery.trim()) return true;
-        const q = searchQuery.toLowerCase();
+        const q = searchQuery.toLowerCase().trim();
         const matchesTag = (l.tags || []).some((t) => t.toLowerCase().includes(q));
+        const matchesGap = (l.gapsFound || []).some(
+          (g) => g.category.toLowerCase().includes(q) || g.problem.toLowerCase().includes(q)
+        );
+        const matchesService = (l.bestService || "").toLowerCase().includes(q);
         return (
           l.businessName.toLowerCase().includes(q) ||
           l.location.toLowerCase().includes(q) ||
           l.businessCategory.toLowerCase().includes(q) ||
-          matchesTag
+          (l.phone || "").includes(q) ||
+          (l.instagramHandle || "").toLowerCase().includes(q) ||
+          matchesTag ||
+          matchesGap ||
+          matchesService
         );
       })
       .sort((a, b) => b.opportunityScore - a.opportunityScore);
   }, [normalizedLeads, filterTier, selectedTag, searchQuery]);
+
+  const hasActiveFilters = filterTier !== "all" || selectedTag !== "all" || Boolean(searchQuery.trim());
+
+  function resetAllFilters() {
+    setFilterTier("all");
+    setSelectedTag("all");
+    setSearchQuery("");
+  }
 
   if (normalizedLeads.length === 0) {
     return (
@@ -277,7 +332,7 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
         <div
           onClick={() => setFilterTier("all")}
           className={cn(
-            "p-4 rounded-xl border bg-white cursor-pointer transition-all duration-200",
+            "p-4 rounded-xl border bg-white cursor-pointer transition-all duration-200 select-none",
             filterTier === "all" ? "ring-2 ring-primary border-primary shadow-sm" : "border-neutral-200 hover:border-neutral-300"
           )}
         >
@@ -286,13 +341,13 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
             <Building2 className="h-4 w-4 text-neutral-400" />
           </div>
           <div className="mt-2 text-2xl font-bold text-neutral-900">{normalizedLeads.length}</div>
-          <div className="mt-1 text-[11px] text-neutral-500">Discovered across searches</div>
+          <div className="mt-1 text-[11px] text-neutral-500">All discovered prospects</div>
         </div>
 
         <div
-          onClick={() => setFilterTier("high")}
+          onClick={() => setFilterTier(filterTier === "high" ? "all" : "high")}
           className={cn(
-            "p-4 rounded-xl border bg-white cursor-pointer transition-all duration-200",
+            "p-4 rounded-xl border bg-white cursor-pointer transition-all duration-200 select-none",
             filterTier === "high" ? "ring-2 ring-rose-500 border-rose-500 shadow-sm" : "border-neutral-200 hover:border-neutral-300"
           )}
         >
@@ -301,13 +356,13 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
             <span className="flex h-2 w-2 rounded-full bg-rose-500 animate-pulse" />
           </div>
           <div className="mt-2 text-2xl font-bold text-neutral-900">{highCount}</div>
-          <div className="mt-1 text-[11px] text-neutral-500">Score 75+ (highest conversion)</div>
+          <div className="mt-1 text-[11px] text-neutral-500">Critical / Score 75+</div>
         </div>
 
         <div
-          onClick={() => setFilterTier("medium")}
+          onClick={() => setFilterTier(filterTier === "medium" ? "all" : "medium")}
           className={cn(
-            "p-4 rounded-xl border bg-white cursor-pointer transition-all duration-200",
+            "p-4 rounded-xl border bg-white cursor-pointer transition-all duration-200 select-none",
             filterTier === "medium" ? "ring-2 ring-amber-500 border-amber-500 shadow-sm" : "border-neutral-200 hover:border-neutral-300"
           )}
         >
@@ -320,9 +375,9 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
         </div>
 
         <div
-          onClick={() => setFilterTier("low")}
+          onClick={() => setFilterTier(filterTier === "low" ? "all" : "low")}
           className={cn(
-            "p-4 rounded-xl border bg-white cursor-pointer transition-all duration-200",
+            "p-4 rounded-xl border bg-white cursor-pointer transition-all duration-200 select-none",
             filterTier === "low" ? "ring-2 ring-neutral-400 border-neutral-400 shadow-sm" : "border-neutral-200 hover:border-neutral-300"
           )}
         >
@@ -337,9 +392,20 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
 
       {/* Tag Filter Chips Bar */}
       <div className="flex flex-col gap-2 bg-neutral-50/70 p-3 rounded-xl border border-neutral-200/80">
-        <div className="flex items-center gap-1.5 text-xs font-semibold text-neutral-600">
-          <TagIcon className="h-3.5 w-3.5 text-primary" />
-          <span>Filter by Lead Tag:</span>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5 text-xs font-semibold text-neutral-600">
+            <TagIcon className="h-3.5 w-3.5 text-primary" />
+            <span>Filter by Lead Tag:</span>
+          </div>
+          {hasActiveFilters && (
+            <button
+              type="button"
+              onClick={resetAllFilters}
+              className="text-[11px] font-semibold text-primary hover:underline"
+            >
+              Reset All Filters
+            </button>
+          )}
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
           <button
@@ -348,7 +414,7 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
             className={cn(
               "inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium transition-all",
               selectedTag === "all"
-                ? "bg-neutral-900 text-white shadow-sm"
+                ? "bg-neutral-900 text-white shadow-sm font-semibold"
                 : "bg-white text-neutral-600 hover:bg-neutral-100 border border-neutral-200"
             )}
           >
@@ -365,7 +431,7 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
 
           {PRESET_LEAD_TAGS.map((preset) => {
             const count = tagCounts[preset.id] || 0;
-            const isSelected = selectedTag === preset.id;
+            const isSelected = selectedTag.toLowerCase() === preset.id.toLowerCase();
             return (
               <button
                 key={preset.id}
@@ -393,6 +459,37 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
               </button>
             );
           })}
+
+          {/* Any custom tags present in discovered leads */}
+          {Object.entries(tagCounts)
+            .filter(([tag]) => !PRESET_LEAD_TAGS.some((p) => p.id.toLowerCase() === tag.toLowerCase()))
+            .map(([tag, count]) => {
+              const isSelected = selectedTag.toLowerCase() === tag.toLowerCase();
+              return (
+                <button
+                  key={tag}
+                  type="button"
+                  onClick={() => setSelectedTag(isSelected ? "all" : tag)}
+                  className={cn(
+                    "inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium transition-all border",
+                    isSelected
+                      ? "bg-primary/10 text-primary border-primary ring-2 ring-offset-1 ring-primary/40 font-semibold shadow-sm"
+                      : "bg-white text-neutral-700 hover:bg-neutral-50 border-neutral-200"
+                  )}
+                >
+                  <TagIcon className="h-2.5 w-2.5 text-neutral-400" />
+                  {tag}
+                  <span
+                    className={cn(
+                      "px-1.5 py-0.2 rounded-full text-[10px]",
+                      isSelected ? "bg-white text-neutral-900 font-bold" : "bg-neutral-100 text-neutral-600"
+                    )}
+                  >
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
         </div>
       </div>
 
@@ -407,12 +504,33 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-9 pr-4 h-9 rounded-lg border border-neutral-200 bg-white text-xs text-neutral-900 focus:outline-none focus:ring-2 focus:ring-primary/30 placeholder:text-neutral-400"
           />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery("")}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
         </div>
 
-        <div className="flex items-center gap-2 text-xs text-neutral-500 self-end sm:self-auto">
+        <div className="flex flex-wrap items-center gap-2 text-xs text-neutral-500 self-end sm:self-auto">
+          {filterTier !== "all" && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-neutral-100 text-neutral-800 text-[11px] font-medium border border-neutral-200">
+              Tier: {filterTier}
+              <button
+                type="button"
+                onClick={() => setFilterTier("all")}
+                className="hover:text-red-600 ml-0.5"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          )}
           {selectedTag !== "all" && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-primary/10 text-primary text-[11px] font-medium">
-              Filtered by: {selectedTag}
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-primary/10 text-primary text-[11px] font-medium border border-primary/20">
+              Tag: {selectedTag}
               <button
                 type="button"
                 onClick={() => setSelectedTag("all")}
@@ -422,16 +540,30 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
               </button>
             </span>
           )}
-          <span>Showing {filteredLeads.length} of {normalizedLeads.length} leads</span>
+          <span>Showing <strong>{filteredLeads.length}</strong> of {normalizedLeads.length} leads</span>
         </div>
       </div>
 
-      {/* Leads List */}
-      <div className="space-y-3">
-        {filteredLeads.map((lead) => {
-          const mainGap = lead.gapsFound && lead.gapsFound.length > 0 ? lead.gapsFound[0] : null;
-          const leadTags = lead.tags || [];
-          const isPickerOpen = activeTagPickerId === lead.id;
+      {/* Leads List or Empty Filter State */}
+      {filteredLeads.length === 0 ? (
+        <div className="p-8 text-center bg-white rounded-xl border border-neutral-200 space-y-3">
+          <div className="h-10 w-10 mx-auto rounded-full bg-neutral-100 flex items-center justify-center text-neutral-400">
+            <Search className="h-5 w-5" />
+          </div>
+          <p className="text-sm font-semibold text-neutral-800">No leads match your active filters</p>
+          <p className="text-xs text-neutral-500 max-w-sm mx-auto">
+            Try adjusting your search query, switching tags, or clearing the opportunity tier filter.
+          </p>
+          <Button size="sm" variant="outline" onClick={resetAllFilters} className="text-xs font-semibold">
+            Reset All Filters
+          </Button>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {filteredLeads.map((lead) => {
+            const mainGap = lead.gapsFound && lead.gapsFound.length > 0 ? lead.gapsFound[0] : null;
+            const leadTags = lead.tags || [];
+            const isPickerOpen = activeTagPickerId === lead.id;
 
           return (
             <div
@@ -652,9 +784,9 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
                         `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
                           `${lead.businessName} ${lead.location}`
                         )}`;
-                      const igUrl = lead.instagramHandle
-                        ? `https://www.instagram.com/${lead.instagramHandle.replace(/^@/, "")}/`
-                        : null;
+                      const igSearchUrl = `https://www.google.com/search?q=${encodeURIComponent(
+                        `${lead.businessName} ${lead.location} instagram`
+                      )}`;
                       const webUrl = lead.websiteUrl
                         ? lead.websiteUrl.startsWith("http")
                           ? lead.websiteUrl
@@ -675,20 +807,20 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
                             target="_blank"
                             rel="noreferrer"
                             className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200/80 font-medium text-[11px] transition-colors"
-                            title="Open original Google Maps business listing"
+                            title="Search and verify on Google Maps"
                           >
                             <MapPin className="h-3 w-3 text-emerald-600 shrink-0" />
                             <span>Google Maps</span>
                             <ExternalLink className="h-2.5 w-2.5 text-emerald-600/70 shrink-0" />
                           </a>
 
-                          {igUrl && (
+                          {lead.instagramHandle && (
                             <a
-                              href={igUrl}
+                              href={igSearchUrl}
                               target="_blank"
                               rel="noreferrer"
                               className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-pink-50 hover:bg-pink-100 text-pink-800 border border-pink-200/80 font-medium text-[11px] transition-colors"
-                              title="Open original Instagram account"
+                              title="Search verified Instagram profile & Reels for this business"
                             >
                               <Camera className="h-3 w-3 text-pink-600 shrink-0" />
                               <span>Instagram</span>

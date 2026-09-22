@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   Search,
-  MapPin,
   Briefcase,
   Layers,
   Coins,
@@ -23,6 +22,11 @@ import {
 } from "@/types";
 import { calculateSearchCost } from "@/lib/credit-calc";
 import { saveLocalLeads, saveLocalSearch, deductLocalCredits } from "@/lib/local-store";
+import {
+  LocationFilter,
+  buildSearchLocationString,
+  ALL_COUNTRIES,
+} from "@/components/search/LocationFilter";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
@@ -49,7 +53,15 @@ export function SearchView({
 
   const [freelancerType, setFreelancerType] = useState<FreelancerType>(initialFreelancerType);
   const [businessCategory, setBusinessCategory] = useState<string>(BUSINESS_CATEGORIES[0]);
-  const [location, setLocation] = useState<string>("");
+  
+  // Country & City selection state
+  const [country, setCountry] = useState<string>("UAE");
+  const [countryCode, setCountryCode] = useState<string>("AE");
+  const [city, setCity] = useState<string>("Dubai");
+  const [place, setPlace] = useState<string>("Jumeirah");
+
+  const location = buildSearchLocationString(place, city, country);
+
   const [resultCount, setResultCount] = useState<number>(10);
   const [availableCredits, setAvailableCredits] = useState<number>(initialAvailableCredits);
 
@@ -64,8 +76,9 @@ export function SearchView({
 
   async function handleStartSearch(e: React.FormEvent) {
     e.preventDefault();
-    if (!location.trim()) {
-      toast.error("Please enter a city or target area");
+    const searchTargetLocation = location.trim();
+    if (!searchTargetLocation) {
+      toast.error("Please select a country and city/area");
       return;
     }
 
@@ -98,10 +111,14 @@ export function SearchView({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          location: location.trim(),
+          location: searchTargetLocation,
           businessCategory,
           freelancerType,
           resultCount,
+          country,
+          countryCode,
+          city,
+          place,
         }),
       });
 
@@ -121,7 +138,7 @@ export function SearchView({
       }
       deductLocalCredits(
         cost.totalCredits,
-        `Search for ${businessCategory} in ${location.trim()} (${resultCount} results)`,
+        `Search for ${businessCategory} in ${searchTargetLocation} (${resultCount} results)`,
         data.searchId
       );
 
@@ -272,19 +289,24 @@ export function SearchView({
                 </select>
               </div>
 
-              {/* Location */}
-              <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase tracking-wider text-neutral-600 flex items-center gap-1.5">
-                  <MapPin className="h-3.5 w-3.5 text-primary" />
-                  Target City or Area
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. Austin, TX or Brooklyn, NY"
-                  value={location}
-                  onChange={(e) => setLocation(e.target.value)}
-                  required
-                  className="w-full h-10 px-3.5 rounded-lg border border-neutral-200 bg-white text-sm text-neutral-900 placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-primary/30"
+              {/* Country, City, Specific Place Selection & Live Query Preview */}
+              <div className="pt-1">
+                <LocationFilter
+                  country={country}
+                  countryCode={countryCode}
+                  city={city}
+                  place={place}
+                  businessCategory={businessCategory}
+                  onCountryChange={(newCountry, newCode) => {
+                    setCountry(newCountry);
+                    setCountryCode(newCode);
+                    const found = ALL_COUNTRIES.find((c) => c.code.toLowerCase() === newCode.toLowerCase());
+                    if (found && found.cities.length > 0) {
+                      setCity(found.cities[0]);
+                    }
+                  }}
+                  onCityChange={setCity}
+                  onPlaceChange={setPlace}
                 />
               </div>
 

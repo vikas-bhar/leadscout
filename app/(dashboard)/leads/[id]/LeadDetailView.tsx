@@ -17,9 +17,23 @@ import {
   FileText,
   DollarSign,
   TrendingUp,
+  Camera,
+  Info,
+  Tag as TagIcon,
+  Plus,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
-import type { Gap, Lead, Pitch, PitchBundle, PitchStyle, UrgencyLevel } from "@/types";
+import {
+  type Gap,
+  type Lead,
+  type Pitch,
+  type PitchBundle,
+  type PitchStyle,
+  type UrgencyLevel,
+  PRESET_LEAD_TAGS,
+  getTagStyle,
+} from "@/types";
 import { OpportunityScore } from "@/components/ui/OpportunityScore";
 import { UrgencyBadge } from "@/components/ui/UrgencyBadge";
 import { Card } from "@/components/ui/card";
@@ -43,6 +57,25 @@ export function LeadDetailView({ initialLead }: LeadDetailViewProps) {
       }
     }
   }, [initialLead]);
+
+  // Extract initial tags
+  const rawTags = leadData.tags;
+  let parsedInitialTags: string[] = [];
+  if (Array.isArray(rawTags)) {
+    parsedInitialTags = rawTags as string[];
+  } else if (typeof rawTags === "string" && rawTags.trim()) {
+    try {
+      parsedInitialTags = JSON.parse(rawTags);
+    } catch {
+      parsedInitialTags = rawTags.split(",").map((s) => s.trim()).filter(Boolean);
+    }
+  } else {
+    const oppScore = Number(leadData.opportunityScore ?? leadData.opportunity_score ?? 70);
+    parsedInitialTags = oppScore >= 80 ? ["Hot"] : oppScore >= 68 ? ["Warm"] : ["Cold"];
+  }
+
+  const [tags, setTags] = useState<string[]>(parsedInitialTags);
+  const [customTagInput, setCustomTagInput] = useState("");
 
   // Normalize snake_case / camelCase
   const lead: Lead = {
@@ -82,6 +115,7 @@ export function LeadDetailView({ initialLead }: LeadDetailViewProps) {
     estimatedBudget: (leadData.estimatedBudget ?? leadData.estimated_budget ?? "$1,000 – $2,500") as string,
     status: (leadData.status ?? "new") as Lead["status"],
     notes: (leadData.notes ?? "") as string,
+    tags,
     contactedAt: (leadData.contactedAt ?? leadData.contacted_at ?? null) as string | null,
     createdAt: (leadData.createdAt ?? leadData.created_at ?? new Date().toISOString()) as string,
   };
@@ -93,6 +127,10 @@ export function LeadDetailView({ initialLead }: LeadDetailViewProps) {
   useEffect(() => {
     if (leadData.status) setStatus(leadData.status as string);
     if (leadData.notes !== undefined) setNotes((leadData.notes as string) || "");
+    if (leadData.tags) {
+      const t = leadData.tags;
+      if (Array.isArray(t)) setTags(t as string[]);
+    }
   }, [leadData]);
 
   const [isSavingNotes, setIsSavingNotes] = useState(false);
@@ -102,6 +140,37 @@ export function LeadDetailView({ initialLead }: LeadDetailViewProps) {
   const pitchesList: Pitch[] = lead.pitches?.pitches || [];
   const activePitch =
     pitchesList.find((p) => p.style === selectedPitchStyle) || pitchesList[0];
+
+  async function handleToggleTag(tagToToggle: string) {
+    let updated: string[];
+    if (tags.includes(tagToToggle)) {
+      updated = tags.filter((t) => t !== tagToToggle);
+    } else {
+      updated = [...tags, tagToToggle];
+    }
+
+    setTags(updated);
+    updateLocalLead(lead.id, { tags: updated });
+
+    try {
+      await fetch(`/api/leads/${lead.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tags: updated }),
+      });
+    } catch {
+      // Handled via local storage
+    }
+
+    toast.success(`Updated tags`);
+  }
+
+  function handleAddCustomTag() {
+    if (!customTagInput.trim()) return;
+    const formatted = customTagInput.trim();
+    handleToggleTag(formatted);
+    setCustomTagInput("");
+  }
 
   async function handleUpdateStatus(newStatus: string) {
     setStatus(newStatus);
@@ -228,36 +297,134 @@ export function LeadDetailView({ initialLead }: LeadDetailViewProps) {
                   </span>
                 )}
               </div>
+
+              {/* Lead Tags Management */}
+              <div className="flex flex-wrap items-center gap-1.5 pt-2">
+                <span className="text-xs font-semibold text-neutral-500 flex items-center gap-1 mr-1">
+                  <TagIcon className="h-3.5 w-3.5 text-primary" />
+                  Lead Tags:
+                </span>
+
+                {tags.map((tag) => {
+                  const style = getTagStyle(tag);
+                  return (
+                    <span
+                      key={tag}
+                      className={cn(
+                        "inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium border shadow-xs transition-colors",
+                        style.bgColor,
+                        style.color,
+                        style.borderColor
+                      )}
+                    >
+                      <span className={cn("h-1.5 w-1.5 rounded-full", style.dotColor)} />
+                      {tag}
+                      <button
+                        type="button"
+                        onClick={() => handleToggleTag(tag)}
+                        className="hover:opacity-75 p-0.5 ml-1 rounded"
+                        title={`Remove tag ${tag}`}
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </span>
+                  );
+                })}
+
+                {/* Preset quick toggle pills */}
+                <div className="flex flex-wrap items-center gap-1 ml-1">
+                  {PRESET_LEAD_TAGS.filter((p) => !tags.includes(p.id)).map((preset) => (
+                    <button
+                      key={preset.id}
+                      type="button"
+                      onClick={() => handleToggleTag(preset.id)}
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-neutral-50 hover:bg-neutral-100 text-neutral-600 border border-dashed border-neutral-300 transition-colors"
+                    >
+                      <Plus className="h-2.5 w-2.5 text-neutral-400" />
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Custom tag input */}
+                <div className="inline-flex items-center gap-1 ml-1">
+                  <input
+                    type="text"
+                    placeholder="+ Custom tag"
+                    value={customTagInput}
+                    onChange={(e) => setCustomTagInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleAddCustomTag();
+                      }
+                    }}
+                    className="h-6 px-2 text-xs border border-neutral-200 rounded-md focus:outline-none focus:ring-1 focus:ring-primary w-24 placeholder:text-neutral-400"
+                  />
+                  {customTagInput.trim() && (
+                    <button
+                      type="button"
+                      onClick={handleAddCustomTag}
+                      className="h-6 px-1.5 bg-primary text-white rounded-md text-xs font-medium hover:bg-primary/90"
+                    >
+                      Add
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
 
-          {/* Quick Action Links */}
+          {/* Quick Action Links & Source Links */}
           <div className="flex flex-wrap items-center gap-2 pt-2 md:pt-0">
             {lead.websiteUrl && (
               <a
-                href={lead.websiteUrl}
+                href={lead.websiteUrl.startsWith("http") ? lead.websiteUrl : `https://${lead.websiteUrl}`}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-neutral-200 text-xs font-medium text-neutral-700 hover:bg-neutral-50 transition-colors"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-blue-200 bg-blue-50/60 text-xs font-medium text-blue-800 hover:bg-blue-100/80 transition-colors"
+                title="Open verified website source"
               >
-                <Globe className="h-3.5 w-3.5 text-neutral-500" />
-                Website
-                <ExternalLink className="h-3 w-3 text-neutral-400" />
+                <Globe className="h-3.5 w-3.5 text-blue-600" />
+                Website Source
+                <ExternalLink className="h-3 w-3 text-blue-500" />
               </a>
             )}
 
-            {lead.mapsUrl && (
+            {lead.instagramHandle && (
               <a
-                href={lead.mapsUrl}
+                href={`https://www.instagram.com/${lead.instagramHandle.replace(/^@/, "")}/`}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-neutral-200 text-xs font-medium text-neutral-700 hover:bg-neutral-50 transition-colors"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-pink-200 bg-pink-50/60 text-xs font-medium text-pink-800 hover:bg-pink-100/80 transition-colors"
+                title="Open verified Instagram profile source"
               >
-                <MapPin className="h-3.5 w-3.5 text-neutral-500" />
-                Google Maps
-                <ExternalLink className="h-3 w-3 text-neutral-400" />
+                <Camera className="h-3.5 w-3.5 text-pink-600" />
+                Instagram Source
+                <ExternalLink className="h-3 w-3 text-pink-500" />
               </a>
             )}
+
+            {(() => {
+              const mapsLink =
+                lead.mapsUrl ||
+                `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                  `${lead.businessName} ${lead.location}`
+                )}`;
+              return (
+                <a
+                  href={mapsLink}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-emerald-200 bg-emerald-50/60 text-xs font-medium text-emerald-800 hover:bg-emerald-100/80 transition-colors"
+                  title="Open verified Google Maps listing source"
+                >
+                  <MapPin className="h-3.5 w-3.5 text-emerald-600" />
+                  Google Maps Source
+                  <ExternalLink className="h-3 w-3 text-emerald-500" />
+                </a>
+              );
+            })()}
 
             {lead.phone && (
               <a
@@ -517,6 +684,161 @@ export function LeadDetailView({ initialLead }: LeadDetailViewProps) {
                 <span className="text-neutral-500">Photo count</span>
                 <span className="font-medium text-neutral-800">{lead.photoCount} photos</span>
               </div>
+            </div>
+          </Card>
+
+          {/* Data Extraction Origins / Source Links */}
+          <Card className="border border-neutral-200/80 shadow-sm p-5 bg-white space-y-3">
+            <div className="flex items-center justify-between pb-2 border-b border-neutral-100">
+              <div className="flex items-center gap-1.5">
+                <Info className="h-4 w-4 text-primary" />
+                <h2 className="text-sm font-semibold text-neutral-900">
+                  Data Extraction Sources
+                </h2>
+              </div>
+              <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">
+                Audited Links
+              </span>
+            </div>
+
+            <p className="text-xs text-neutral-500">
+              Our audit tool extracted ratings, content metrics, and contact details from these live sources:
+            </p>
+
+            <div className="space-y-2.5 pt-1">
+              {/* Google Maps Source */}
+              {(() => {
+                const mapsLink =
+                  lead.mapsUrl ||
+                  `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                    `${lead.businessName} ${lead.location}`
+                  )}`;
+                return (
+                  <div className="p-2.5 rounded-lg border border-emerald-100 bg-emerald-50/40 flex flex-col gap-1.5 text-xs">
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-emerald-900 flex items-center gap-1.5">
+                        <MapPin className="h-3.5 w-3.5 text-emerald-600" />
+                        Google Maps Listing
+                      </span>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => handleCopy(mapsLink, "maps_url")}
+                          className="px-2 py-0.5 rounded text-[11px] font-medium text-emerald-700 hover:bg-emerald-100 transition-colors flex items-center gap-1"
+                        >
+                          {copiedKey === "maps_url" ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                          Copy
+                        </button>
+                        <a
+                          href={mapsLink}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="px-2 py-0.5 rounded text-[11px] font-semibold text-white bg-emerald-600 hover:bg-emerald-700 transition-colors flex items-center gap-1"
+                        >
+                          <span>Open</span>
+                          <ExternalLink className="h-2.5 w-2.5" />
+                        </a>
+                      </div>
+                    </div>
+                    <span className="text-[11px] text-neutral-500 truncate font-mono">
+                      {mapsLink}
+                    </span>
+                    <span className="text-[10px] text-emerald-700/80">
+                      Extracted: {lead.googleRating}★ rating, {lead.reviewCount} reviews, phone, photos & address
+                    </span>
+                  </div>
+                );
+              })()}
+
+              {/* Instagram Source */}
+              {lead.instagramHandle && (
+                <div className="p-2.5 rounded-lg border border-pink-100 bg-pink-50/40 flex flex-col gap-1.5 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-pink-900 flex items-center gap-1.5">
+                      <Camera className="h-3.5 w-3.5 text-pink-600" />
+                      Instagram Account
+                    </span>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleCopy(
+                            `https://www.instagram.com/${lead.instagramHandle?.replace(/^@/, "")}/`,
+                            "ig_url"
+                          )
+                        }
+                        className="px-2 py-0.5 rounded text-[11px] font-medium text-pink-700 hover:bg-pink-100 transition-colors flex items-center gap-1"
+                      >
+                        {copiedKey === "ig_url" ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                        Copy
+                      </button>
+                      <a
+                        href={`https://www.instagram.com/${lead.instagramHandle.replace(/^@/, "")}/`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="px-2 py-0.5 rounded text-[11px] font-semibold text-white bg-pink-600 hover:bg-pink-700 transition-colors flex items-center gap-1"
+                      >
+                        <span>Open</span>
+                        <ExternalLink className="h-2.5 w-2.5" />
+                      </a>
+                    </div>
+                  </div>
+                  <span className="text-[11px] text-neutral-500 truncate font-mono">
+                    https://www.instagram.com/{lead.instagramHandle.replace(/^@/, "")}/
+                  </span>
+                  <span className="text-[10px] text-pink-700/80">
+                    Extracted: {lead.instagramFollowers?.toLocaleString() || "Profile"} followers, Reels status, link-in-bio & last post date
+                  </span>
+                </div>
+              )}
+
+              {/* Website Source */}
+              {lead.websiteUrl && (
+                <div className="p-2.5 rounded-lg border border-blue-100 bg-blue-50/40 flex flex-col gap-1.5 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-blue-900 flex items-center gap-1.5">
+                      <Globe className="h-3.5 w-3.5 text-blue-600" />
+                      Official Website
+                    </span>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleCopy(
+                            lead.websiteUrl!.startsWith("http")
+                              ? lead.websiteUrl!
+                              : `https://${lead.websiteUrl!}`,
+                            "web_url"
+                          )
+                        }
+                        className="px-2 py-0.5 rounded text-[11px] font-medium text-blue-700 hover:bg-blue-100 transition-colors flex items-center gap-1"
+                      >
+                        {copiedKey === "web_url" ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                        Copy
+                      </button>
+                      <a
+                        href={
+                          lead.websiteUrl.startsWith("http")
+                            ? lead.websiteUrl
+                            : `https://${lead.websiteUrl}`
+                        }
+                        target="_blank"
+                        rel="noreferrer"
+                        className="px-2 py-0.5 rounded text-[11px] font-semibold text-white bg-blue-600 hover:bg-blue-700 transition-colors flex items-center gap-1"
+                      >
+                        <span>Open</span>
+                        <ExternalLink className="h-2.5 w-2.5" />
+                      </a>
+                    </div>
+                  </div>
+                  <span className="text-[11px] text-neutral-500 truncate font-mono">
+                    {lead.websiteUrl}
+                  </span>
+                  <span className="text-[10px] text-blue-700/80">
+                    Extracted: Web responsiveness, CTA conversion paths, page title & contact data
+                  </span>
+                </div>
+              )}
             </div>
           </Card>
         </div>

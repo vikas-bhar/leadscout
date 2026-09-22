@@ -113,6 +113,9 @@ export function generateMockLeads({
   businessCategory,
   freelancerType,
   count,
+  place,
+  city,
+  country,
 }: {
   searchId: string;
   userId: string;
@@ -120,9 +123,13 @@ export function generateMockLeads({
   businessCategory: string;
   freelancerType: FreelancerType;
   count: number;
+  place?: string;
+  city?: string;
+  country?: string;
 }): Array<Omit<Lead, "id" | "createdAt">> {
+  const primaryArea = place?.trim() || city?.trim() || location.split(",")[0]?.trim() || "Metro";
   const baseNames = CATEGORY_NAMES[businessCategory] || [
-    `${location.split(",")[0]} Premier ${businessCategory}`,
+    `${primaryArea} Premier ${businessCategory}`,
     `The ${businessCategory} Spot`,
     `Classic ${businessCategory} Works`,
     `Apex ${businessCategory} Studio`,
@@ -311,12 +318,20 @@ export function generateMockLeads({
       buyingSignals: [
         `Strong Google reputation (${googleRating}★)`,
         hasWebsite ? "Invests in digital marketing" : "Ready for first serious online presence",
-        "Active in local market with repeat clientele",
+        country ? `Active in ${country} local market with repeat clientele` : "Active in local market with repeat clientele",
       ],
       pitches: pitchBundle,
       estimatedBudget: opportunityScore > 80 ? "$1,500 – $3,000 / project" : "$800 – $1,500 / project",
       status: "new",
       notes: null,
+      tags:
+        opportunityScore >= 80
+          ? ["Hot", "Qualified"]
+          : opportunityScore >= 68
+          ? ["Warm"]
+          : !usesReels
+          ? ["Follow-up needed", "Cold"]
+          : ["Cold"],
       contactedAt: null,
     });
   }

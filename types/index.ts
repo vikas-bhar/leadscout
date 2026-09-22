@@ -142,6 +142,88 @@ export interface GapAnalysisResult {
   hookStatement: string;
 }
 
+export type LeadTag =
+  | "Cold"
+  | "Warm"
+  | "Hot"
+  | "Follow-up needed"
+  | "Qualified"
+  | "High Budget"
+  | "Unresponsive";
+
+export interface TagStyle {
+  id: LeadTag | string;
+  label: string;
+  color: string;
+  bgColor: string;
+  borderColor: string;
+  dotColor: string;
+}
+
+export const PRESET_LEAD_TAGS: TagStyle[] = [
+  {
+    id: "Hot",
+    label: "Hot",
+    color: "text-rose-700 dark:text-rose-300",
+    bgColor: "bg-rose-50 dark:bg-rose-950/40",
+    borderColor: "border-rose-200 dark:border-rose-800",
+    dotColor: "bg-rose-500",
+  },
+  {
+    id: "Warm",
+    label: "Warm",
+    color: "text-amber-700 dark:text-amber-300",
+    bgColor: "bg-amber-50 dark:bg-amber-950/40",
+    borderColor: "border-amber-200 dark:border-amber-800",
+    dotColor: "bg-amber-500",
+  },
+  {
+    id: "Cold",
+    label: "Cold",
+    color: "text-blue-700 dark:text-blue-300",
+    bgColor: "bg-blue-50 dark:bg-blue-950/40",
+    borderColor: "border-blue-200 dark:border-blue-800",
+    dotColor: "bg-blue-500",
+  },
+  {
+    id: "Follow-up needed",
+    label: "Follow-up needed",
+    color: "text-purple-700 dark:text-purple-300",
+    bgColor: "bg-purple-50 dark:bg-purple-950/40",
+    borderColor: "border-purple-200 dark:border-purple-800",
+    dotColor: "bg-purple-500",
+  },
+  {
+    id: "Qualified",
+    label: "Qualified",
+    color: "text-emerald-700 dark:text-emerald-300",
+    bgColor: "bg-emerald-50 dark:bg-emerald-950/40",
+    borderColor: "border-emerald-200 dark:border-emerald-800",
+    dotColor: "bg-emerald-500",
+  },
+  {
+    id: "High Budget",
+    label: "High Budget",
+    color: "text-cyan-700 dark:text-cyan-300",
+    bgColor: "bg-cyan-50 dark:bg-cyan-950/40",
+    borderColor: "border-cyan-200 dark:border-cyan-800",
+    dotColor: "bg-cyan-500",
+  },
+];
+
+export function getTagStyle(tag: string): TagStyle {
+  const match = PRESET_LEAD_TAGS.find((p) => p.id.toLowerCase() === tag.toLowerCase() || p.label.toLowerCase() === tag.toLowerCase());
+  if (match) return match;
+  return {
+    id: tag,
+    label: tag,
+    color: "text-neutral-700 dark:text-neutral-300",
+    bgColor: "bg-neutral-100 dark:bg-neutral-800",
+    borderColor: "border-neutral-200 dark:border-neutral-700",
+    dotColor: "bg-neutral-400",
+  };
+}
+
 export interface Lead {
   id: string;
   searchId: string;
@@ -175,6 +257,7 @@ export interface Lead {
   estimatedBudget: string | null;
   status: LeadStatus;
   notes: string | null;
+  tags?: string[];
   contactedAt: string | null;
   createdAt: string;
 }
@@ -279,7 +362,50 @@ export const CREDIT_COSTS = {
   aiGapAnalysisPerBusiness: 0.5,
   aiPitchPerBusiness: 0.5,
   csvExport: 2,
+  analyze_link: 5,
+  analyzeLink: 5,
 } as const;
+
+export interface AnalyzerGap {
+  area: string;
+  problem: string;
+  impact: string;
+  severity: "low" | "medium" | "high" | "critical";
+  fix: string;
+  estimatedImpact: string;
+}
+
+export interface AnalyzerResultData {
+  linkType: "instagram" | "website" | "maps" | "facebook";
+  targetUrl: string;
+  title: string;
+  handle?: string;
+  domain?: string;
+  // Scores
+  overallScore: number;
+  contentScore?: number;
+  engagementScore?: number;
+  growthScore?: number;
+  seoScore?: number;
+  uxScore?: number;
+  conversionScore?: number;
+  followerHealthScore?: number;
+  // Gap analysis
+  gaps: AnalyzerGap[];
+  whatTheyDoWell: string[];
+  missedOpportunities: string[];
+  estimatedLoss: string;
+  recommendedServices: string[];
+  pitchAngle: string;
+  urgencyLevel: "low" | "medium" | "high" | "critical";
+  // Pitches
+  instagramDMPitch?: string;
+  emailPitch?: string;
+  outreachEmail?: string;
+  whatsappPitch?: string;
+  // Extracted raw/scraped summary
+  metadata?: Record<string, unknown>;
+}
 
 export const CREDIT_PACKAGES: CreditPackage[] = [
   {

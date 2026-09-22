@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireApiUser } from "@/lib/supabase";
 import { calculateSearchCost, deductUserCredits, getCreditBalance } from "@/lib/credits";
 import { generateMockLeads } from "@/lib/lead-generator";
+import { runApifyGoogleMapsScraper } from "@/lib/apify";
 import type { FreelancerType } from "@/types";
 
 export const dynamic = "force-dynamic";
@@ -12,6 +13,10 @@ const searchRequestSchema = z.object({
   businessCategory: z.string().min(1, "Business category is required"),
   freelancerType: z.string().min(1, "Freelancer type is required"),
   resultCount: z.number().min(10).max(50).default(10),
+  country: z.string().optional(),
+  countryCode: z.string().optional(),
+  city: z.string().optional(),
+  place: z.string().optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -74,15 +79,55 @@ export async function POST(request: NextRequest) {
 
     const searchId = searchRecord?.id || crypto.randomUUID();
 
-    // Generate enriched leads
-    const generatedLeads = generateMockLeads({
+    // Trigger Apify Google Maps scraper safely with timeout
+    const apifyResponse = await runApifyGoogleMapsScraper({
+      businessType: parsed.businessCategory,
+      country: parsed.country,
+      city: parsed.city,
+      place: parsed.place,
+      location: parsed.location,
+      maxResults: parsed.resultCount,
+    });
+
+    let generatedLeads = generateMockLeads({
       searchId,
       userId: auth.user.id,
       location: parsed.location,
       businessCategory: parsed.businessCategory,
       freelancerType: parsed.freelancerType as FreelancerType,
       count: parsed.resultCount,
+      place: parsed.place,
+      city: parsed.city,
+      country: parsed.country,
     });
+
+    // If Apify crawler returned real Google Places items, enrich our leads with real data
+    if (Array.isArray(apifyResponse.results) && apifyResponse.results.length > 0) {
+      generatedLeads = generatedLeads.map((mockLead, idx) => {
+        const realItem = (apifyResponse.results as Array<Record<string, unknown>>)[idx];
+        if (!realItem) return mockLead;
+
+        const realTitle = (realItem.title as string) || mockLead.businessName;
+        const realAddress = (realItem.address as string) || (realItem.street as string) || mockLead.location;
+        const realRating = typeof realItem.totalScore === "number" ? realItem.totalScore : mockLead.googleRating;
+        const realReviews = typeof realItem.reviewsCount === "number" ? realItem.reviewsCount : mockLead.reviewCount;
+        const realWeb = (realItem.website as string) || mockLead.websiteUrl;
+        const realPhone = (realItem.phone as string) || mockLead.phone;
+        const realUrl = (realItem.url as string) || mockLead.mapsUrl;
+
+        return {
+          ...mockLead,
+          businessName: realTitle,
+          location: realAddress,
+          googleRating: realRating,
+          reviewCount: realReviews,
+          hasWebsite: Boolean(realWeb),
+          websiteUrl: realWeb || null,
+          phone: realPhone || null,
+          mapsUrl: realUrl,
+        };
+      });
+    }
 
     // Map to DB snake_case columns
     const dbLeads = generatedLeads.map((l) => ({

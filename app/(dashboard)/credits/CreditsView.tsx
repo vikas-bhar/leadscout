@@ -367,9 +367,14 @@ export function CreditsView({
               <p className="mt-1 text-xs text-muted-foreground">Download full lead dossiers</p>
             </div>
 
-            <div className="p-3.5 rounded-lg border border-primary/20 bg-primary/5 flex flex-col justify-center">
-              <span className="text-xs font-semibold text-primary">Standard 10-Lead Search</span>
-              <p className="mt-0.5 text-xs text-neutral-600 font-medium">Total: 7 credits per 10 leads</p>
+            <div className="p-3.5 rounded-lg border border-primary/20 bg-primary/5 flex flex-col justify-between">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-semibold text-neutral-900">Gap Analyzer (Direct URL)</span>
+                <span className="text-xs font-bold px-2 py-0.5 rounded bg-primary text-white shrink-0 whitespace-nowrap">
+                  5 credits
+                </span>
+              </div>
+              <p className="mt-0.5 text-xs text-neutral-600">Audit single Instagram, Website, Maps or FB link + custom pitch</p>
             </div>
           </div>
         </CardContent>

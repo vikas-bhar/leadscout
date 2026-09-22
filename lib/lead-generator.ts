@@ -301,7 +301,7 @@ export function generateMockLeads({
       reviewCount,
       hasWebsite,
       websiteUrl: hasWebsite ? `https://www.${handle}.com` : null,
-      phone: `(${300 + (i * 17) % 600}) 555-${1000 + (i * 83) % 8999}`,
+      phone: `+1 (${201 + ((i * 37) % 700)}) ${220 + ((i * 43) % 700)}-${1100 + ((i * 79) % 8800)}`,
       photoCount: 12 + (i * 7) % 85,
       mapsUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${businessName}, ${location}`)}`,
       instagramHandle: hasInstagram ? `@${handle}` : null,

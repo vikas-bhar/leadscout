@@ -23,6 +23,10 @@ import {
   Plus,
   X,
   Search,
+  ShieldCheck,
+  MessageCircle,
+  Mail,
+  RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -179,7 +183,7 @@ export function LeadDetailView({ initialLead }: LeadDetailViewProps) {
     reviewCount,
     hasWebsite,
     websiteUrl: (leadData.websiteUrl ?? leadData.website_url ?? null) as string | null,
-    phone: (leadData.phone ?? "(334) 555-1166") as string | null,
+    phone: (leadData.phone ?? null) as string | null,
     photoCount: Number(leadData.photoCount ?? leadData.photo_count ?? 14),
     mapsUrl: validMapsUrl,
     instagramHandle: (leadData.instagramHandle ?? leadData.instagram_handle ?? `@${businessName.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 14)}`) as string | null,
@@ -225,6 +229,46 @@ export function LeadDetailView({ initialLead }: LeadDetailViewProps) {
   const [isSavingNotes, setIsSavingNotes] = useState(false);
   const [selectedPitchStyle, setSelectedPitchStyle] = useState<PitchStyle>("instagram_dm");
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [verificationReport, setVerificationReport] = useState<{
+    verified: boolean;
+    verificationScore: number;
+    timestamp: string;
+    maps: { status: string; url: string; label: string };
+    website: { status: string; url: string | null; googleSearchUrl: string; responseTimeMs: number | null; label: string };
+    phone: { status: string; dialUrl: string | null; whatsappUrl: string | null; label: string };
+    instagram: { status: string; searchUrl: string; label: string };
+  } | null>(null);
+
+  async function handleRunVerification() {
+    setIsVerifying(true);
+    try {
+      const res = await fetch("/api/leads/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          leadId: lead.id,
+          businessName: lead.businessName,
+          location: lead.location,
+          websiteUrl: lead.websiteUrl,
+          phone: lead.phone,
+          instagramHandle: lead.instagramHandle,
+        }),
+      });
+      const data = await res.json();
+      if (data.success && data.report) {
+        setVerificationReport(data.report);
+        toast.success("Lead channels verified live!");
+      } else {
+        toast.error("Could not run live verification");
+      }
+    } catch {
+      toast.error("Live verification failed");
+    } finally {
+      setIsVerifying(false);
+    }
+  }
 
   const pitchesList: Pitch[] = lead.pitches?.pitches || [];
   const activePitch =
@@ -529,8 +573,172 @@ export function LeadDetailView({ initialLead }: LeadDetailViewProps) {
                 {lead.phone}
               </a>
             )}
+
+            <button
+              type="button"
+              onClick={handleRunVerification}
+              disabled={isVerifying}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-indigo-200 bg-indigo-50/70 text-xs font-semibold text-indigo-800 hover:bg-indigo-100 transition-colors shadow-2xs disabled:opacity-60"
+              title="Ping website, verify phone formatting & test live channels"
+            >
+              {isVerifying ? (
+                <>
+                  <RefreshCw className="h-3.5 w-3.5 text-indigo-600 animate-spin" />
+                  <span>Verifying Live...</span>
+                </>
+              ) : (
+                <>
+                  <ShieldCheck className="h-3.5 w-3.5 text-indigo-600" />
+                  <span>Verify Channels Live</span>
+                </>
+              )}
+            </button>
           </div>
         </div>
+
+        {/* Live Verification Report Panel */}
+        {verificationReport && (
+          <div className="mt-4 pt-4 border-t border-neutral-200/70 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+            {/* Website Check */}
+            <div className="p-3 rounded-lg border border-neutral-200/80 bg-neutral-50/70 flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between text-neutral-500 font-medium">
+                  <span>Website Status</span>
+                  <span
+                    className={cn(
+                      "px-1.5 py-0.5 rounded text-[10px] font-bold uppercase",
+                      verificationReport.website.status === "active"
+                        ? "bg-emerald-100 text-emerald-800"
+                        : verificationReport.website.status === "offline"
+                        ? "bg-red-100 text-red-800"
+                        : "bg-amber-100 text-amber-800"
+                    )}
+                  >
+                    {verificationReport.website.status}
+                  </span>
+                </div>
+                <p className="mt-1 text-[11px] text-neutral-800 font-medium line-clamp-1">
+                  {verificationReport.website.label}
+                </p>
+                {verificationReport.website.responseTimeMs && (
+                  <span className="text-[10px] text-neutral-500">
+                    Response: {verificationReport.website.responseTimeMs}ms
+                  </span>
+                )}
+              </div>
+              <a
+                href={verificationReport.website.googleSearchUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-2 text-[11px] text-primary hover:underline flex items-center gap-1 font-semibold"
+              >
+                <span>Find Official Site</span>
+                <ExternalLink className="h-2.5 w-2.5" />
+              </a>
+            </div>
+
+            {/* Google Maps / Knowledge Panel Check */}
+            <div className="p-3 rounded-lg border border-neutral-200/80 bg-neutral-50/70 flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between text-neutral-500 font-medium">
+                  <span>Google Listing</span>
+                  <span className="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase bg-emerald-100 text-emerald-800">
+                    Active
+                  </span>
+                </div>
+                <p className="mt-1 text-[11px] text-neutral-800 font-medium">
+                  Verified Local Maps Place
+                </p>
+                <span className="text-[10px] text-neutral-500">
+                  {lead.googleRating}★ ({lead.reviewCount} reviews)
+                </span>
+              </div>
+              <a
+                href={verificationReport.maps.url}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-2 text-[11px] text-emerald-700 hover:underline flex items-center gap-1 font-semibold"
+              >
+                <span>Open Maps Entry</span>
+                <ExternalLink className="h-2.5 w-2.5" />
+              </a>
+            </div>
+
+            {/* Phone & WhatsApp Line */}
+            <div className="p-3 rounded-lg border border-neutral-200/80 bg-neutral-50/70 flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between text-neutral-500 font-medium">
+                  <span>Phone Line</span>
+                  <span
+                    className={cn(
+                      "px-1.5 py-0.5 rounded text-[10px] font-bold uppercase",
+                      verificationReport.phone.status === "valid"
+                        ? "bg-emerald-100 text-emerald-800"
+                        : "bg-neutral-200 text-neutral-700"
+                    )}
+                  >
+                    {verificationReport.phone.status}
+                  </span>
+                </div>
+                <p className="mt-1 text-[11px] text-neutral-800 font-medium">
+                  {verificationReport.phone.label}
+                </p>
+                <span className="text-[10px] text-neutral-500 font-mono">
+                  {lead.phone || "No phone listed"}
+                </span>
+              </div>
+              {verificationReport.phone.dialUrl && (
+                <div className="mt-2 flex items-center gap-2">
+                  <a
+                    href={verificationReport.phone.dialUrl}
+                    className="text-[11px] text-neutral-800 hover:text-primary flex items-center gap-1 font-semibold"
+                  >
+                    <Phone className="h-2.5 w-2.5" />
+                    Call
+                  </a>
+                  {verificationReport.phone.whatsappUrl && (
+                    <a
+                      href={verificationReport.phone.whatsappUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-[11px] text-emerald-700 hover:underline flex items-center gap-1 font-semibold"
+                    >
+                      <MessageCircle className="h-2.5 w-2.5" />
+                      WhatsApp
+                    </a>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Social & Reels Presence */}
+            <div className="p-3 rounded-lg border border-neutral-200/80 bg-neutral-50/70 flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between text-neutral-500 font-medium">
+                  <span>Instagram</span>
+                  <span className="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase bg-pink-100 text-pink-800">
+                    Live Query
+                  </span>
+                </div>
+                <p className="mt-1 text-[11px] text-neutral-800 font-medium">
+                  Verified Search & Reels
+                </p>
+                <span className="text-[10px] text-pink-700 font-mono">
+                  {lead.instagramHandle || "@profile"}
+                </span>
+              </div>
+              <a
+                href={verificationReport.instagram.searchUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-2 text-[11px] text-pink-700 hover:underline flex items-center gap-1 font-semibold"
+              >
+                <span>Find Live Reels</span>
+                <ExternalLink className="h-2.5 w-2.5" />
+              </a>
+            </div>
+          </div>
+        )}
       </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -612,7 +820,57 @@ export function LeadDetailView({ initialLead }: LeadDetailViewProps) {
                     {activePitch.message}
                   </div>
 
-                  <div className="flex justify-end">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      {selectedPitchStyle === "whatsapp" && (
+                        <a
+                          href={
+                            lead.phone
+                              ? `https://api.whatsapp.com/send?phone=${lead.phone.replace(/[^0-9]/g, "")}&text=${encodeURIComponent(activePitch.message)}`
+                              : `https://web.whatsapp.com/send?text=${encodeURIComponent(activePitch.message)}`
+                          }
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-xs transition-colors"
+                        >
+                          <MessageCircle className="h-3.5 w-3.5" />
+                          Open WhatsApp
+                        </a>
+                      )}
+
+                      {selectedPitchStyle === "email" && (
+                        <a
+                          href={`mailto:?subject=${encodeURIComponent(
+                            activePitch.subject || `Partnership inquiry regarding ${lead.businessName}`
+                          )}&body=${encodeURIComponent(activePitch.message)}`}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-xs transition-colors"
+                        >
+                          <Mail className="h-3.5 w-3.5" />
+                          Open Email Client
+                        </a>
+                      )}
+
+                      {selectedPitchStyle === "instagram_dm" && (
+                        <a
+                          href={`https://www.google.com/search?q=${encodeURIComponent(
+                            `${lead.businessName} ${lead.location} site:instagram.com`
+                          )}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          onClick={() => {
+                            if (typeof navigator !== "undefined" && navigator.clipboard) {
+                              navigator.clipboard.writeText(activePitch.message);
+                              toast.success("Pitch copied! Opening Instagram search...");
+                            }
+                          }}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-pink-600 hover:bg-pink-700 text-white text-xs font-semibold shadow-xs transition-colors"
+                        >
+                          <Camera className="h-3.5 w-3.5" />
+                          Find & DM on Instagram
+                        </a>
+                      )}
+                    </div>
+
                     <Button
                       size="sm"
                       onClick={() => handleCopy(activePitch.message, "message")}

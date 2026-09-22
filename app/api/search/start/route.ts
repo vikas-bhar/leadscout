@@ -4,7 +4,8 @@ import { requireApiUser } from "@/lib/supabase";
 import { calculateSearchCost, deductUserCredits, getCreditBalance } from "@/lib/credits";
 import { generateMockLeads } from "@/lib/lead-generator";
 import { runApifyGoogleMapsScraper } from "@/lib/apify";
-import type { FreelancerType } from "@/types";
+import { findRealBusinessesWithGemini } from "@/lib/gemini-leads";
+import type { FreelancerType, Lead } from "@/types";
 
 export const dynamic = "force-dynamic";
 
@@ -89,21 +90,23 @@ export async function POST(request: NextRequest) {
       maxResults: parsed.resultCount,
     });
 
-    let generatedLeads = generateMockLeads({
-      searchId,
-      userId: auth.user.id,
-      location: parsed.location,
-      businessCategory: parsed.businessCategory,
-      freelancerType: parsed.freelancerType as FreelancerType,
-      count: parsed.resultCount,
-      place: parsed.place,
-      city: parsed.city,
-      country: parsed.country,
-    });
+    let generatedLeads: Lead[] | null = null;
 
-    // If Apify crawler returned real Google Places items, enrich our leads with real data
+    // 1. If Apify returned real Google Places items, enrich with real crawler data
     if (Array.isArray(apifyResponse.results) && apifyResponse.results.length > 0) {
-      generatedLeads = generatedLeads.map((mockLead, idx) => {
+      const baseMock = generateMockLeads({
+        searchId,
+        userId: auth.user.id,
+        location: parsed.location,
+        businessCategory: parsed.businessCategory,
+        freelancerType: parsed.freelancerType as FreelancerType,
+        count: parsed.resultCount,
+        place: parsed.place,
+        city: parsed.city,
+        country: parsed.country,
+      });
+
+      generatedLeads = baseMock.map((mockLead, idx) => {
         const realItem = (apifyResponse.results as Array<Record<string, unknown>>)[idx];
         if (!realItem) return mockLead;
 
@@ -125,7 +128,43 @@ export async function POST(request: NextRequest) {
           websiteUrl: realWeb || null,
           phone: realPhone || null,
           mapsUrl: realUrl,
+          tags: [...(mockLead.tags || []), "Verified"],
         };
+      });
+    }
+
+    // 2. If no Apify data, discover REAL operating local businesses using Gemini Intelligence
+    if (!generatedLeads || generatedLeads.length === 0) {
+      try {
+        const realGeminiLeads = await findRealBusinessesWithGemini({
+          searchId,
+          userId: auth.user.id,
+          location: parsed.location,
+          businessCategory: parsed.businessCategory,
+          freelancerType: parsed.freelancerType as FreelancerType,
+          count: parsed.resultCount,
+        });
+
+        if (realGeminiLeads && realGeminiLeads.length > 0) {
+          generatedLeads = realGeminiLeads;
+        }
+      } catch (geminiErr) {
+        console.log("Gemini real business discovery error:", geminiErr);
+      }
+    }
+
+    // 3. Fallback to realistic lead generator if network/quotas are unavailable
+    if (!generatedLeads || generatedLeads.length === 0) {
+      generatedLeads = generateMockLeads({
+        searchId,
+        userId: auth.user.id,
+        location: parsed.location,
+        businessCategory: parsed.businessCategory,
+        freelancerType: parsed.freelancerType as FreelancerType,
+        count: parsed.resultCount,
+        place: parsed.place,
+        city: parsed.city,
+        country: parsed.country,
       });
     }
 

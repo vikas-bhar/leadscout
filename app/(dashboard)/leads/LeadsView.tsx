@@ -44,6 +44,8 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
   const [leadsList, setLeadsList] = useState<Lead[]>(initialLeads);
   const [filterTier, setFilterTier] = useState<"all" | "high" | "medium" | "low">("all");
   const [selectedTag, setSelectedTag] = useState<string>("all");
+  const [filterGap, setFilterGap] = useState<string>("all");
+  const [sortBy, setSortBy] = useState<"score_desc" | "score_asc" | "rating_asc" | "reviews_asc" | "name_asc">("score_desc");
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTagPickerId, setActiveTagPickerId] = useState<string | null>(null);
   const [customTagInput, setCustomTagInput] = useState("");
@@ -198,23 +200,28 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
     setCustomTagInput("");
   }
 
-  // Summary counts with synchronized tier criteria
+  // Unified single source of truth for Lead Opportunity Tier
+  function getLeadTier(lead: Lead): "high" | "medium" | "low" {
+    if (lead.opportunityScore >= 75 || lead.urgencyLevel === "high" || lead.urgencyLevel === "critical") {
+      return "high";
+    }
+    if (lead.opportunityScore >= 60 || lead.urgencyLevel === "medium") {
+      return "medium";
+    }
+    return "low";
+  }
+
+  // Summary counts strictly partitioned so totals always match
   const highCount = useMemo(() => {
-    return normalizedLeads.filter(
-      (l) => l.opportunityScore >= 75 || l.urgencyLevel === "high" || l.urgencyLevel === "critical"
-    ).length;
+    return normalizedLeads.filter((l) => getLeadTier(l) === "high").length;
   }, [normalizedLeads]);
 
   const mediumCount = useMemo(() => {
-    return normalizedLeads.filter(
-      (l) => (l.opportunityScore >= 65 && l.opportunityScore < 75) || (l.urgencyLevel === "medium" && l.opportunityScore < 75)
-    ).length;
+    return normalizedLeads.filter((l) => getLeadTier(l) === "medium").length;
   }, [normalizedLeads]);
 
   const lowCount = useMemo(() => {
-    return normalizedLeads.filter(
-      (l) => l.opportunityScore < 65 && l.urgencyLevel !== "high" && l.urgencyLevel !== "critical"
-    ).length;
+    return normalizedLeads.filter((l) => getLeadTier(l) === "low").length;
   }, [normalizedLeads]);
 
   // Compute all available tags (presets + custom tags on leads) and their counts
@@ -224,7 +231,6 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
       (l.tags || []).forEach((t) => {
         const clean = t.trim();
         if (clean) {
-          // Find matching key case-insensitively or set
           const existingKey = Object.keys(counts).find((k) => k.toLowerCase() === clean.toLowerCase());
           const key = existingKey || clean;
           counts[key] = (counts[key] || 0) + 1;
@@ -238,14 +244,8 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
   const filteredLeads = useMemo(() => {
     return normalizedLeads
       .filter((l) => {
-        if (filterTier === "high") {
-          return l.opportunityScore >= 75 || l.urgencyLevel === "high" || l.urgencyLevel === "critical";
-        }
-        if (filterTier === "medium") {
-          return (l.opportunityScore >= 65 && l.opportunityScore < 75) || (l.urgencyLevel === "medium" && l.opportunityScore < 75);
-        }
-        if (filterTier === "low") {
-          return l.opportunityScore < 65 && l.urgencyLevel !== "high" && l.urgencyLevel !== "critical";
+        if (filterTier !== "all") {
+          if (getLeadTier(l) !== filterTier) return false;
         }
         return true;
       })
@@ -254,6 +254,22 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
         return (l.tags || []).some(
           (t) => t.trim().toLowerCase() === selectedTag.trim().toLowerCase()
         );
+      })
+      .filter((l) => {
+        if (filterGap === "all") return true;
+        if (filterGap === "missing_website") {
+          return !l.websiteUrl || (l.gapsFound || []).some((g) => g.category.toLowerCase().includes("website") || g.problem.toLowerCase().includes("website"));
+        }
+        if (filterGap === "mobile_ux") {
+          return (l.gapsFound || []).some((g) => g.category.toLowerCase().includes("mobile") || g.problem.toLowerCase().includes("mobile"));
+        }
+        if (filterGap === "no_reels") {
+          return (l.gapsFound || []).some((g) => g.category.toLowerCase().includes("reels") || g.problem.toLowerCase().includes("reels") || g.category.toLowerCase().includes("video"));
+        }
+        if (filterGap === "low_rating") {
+          return l.googleRating < 4.2;
+        }
+        return true;
       })
       .filter((l) => {
         if (!searchQuery.trim()) return true;
@@ -274,14 +290,22 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
           matchesService
         );
       })
-      .sort((a, b) => b.opportunityScore - a.opportunityScore);
-  }, [normalizedLeads, filterTier, selectedTag, searchQuery]);
+      .sort((a, b) => {
+        if (sortBy === "score_asc") return a.opportunityScore - b.opportunityScore;
+        if (sortBy === "rating_asc") return a.googleRating - b.googleRating;
+        if (sortBy === "reviews_asc") return a.reviewCount - b.reviewCount;
+        if (sortBy === "name_asc") return a.businessName.localeCompare(b.businessName);
+        return b.opportunityScore - a.opportunityScore;
+      });
+  }, [normalizedLeads, filterTier, selectedTag, filterGap, searchQuery, sortBy]);
 
-  const hasActiveFilters = filterTier !== "all" || selectedTag !== "all" || Boolean(searchQuery.trim());
+  const hasActiveFilters = filterTier !== "all" || selectedTag !== "all" || filterGap !== "all" || Boolean(searchQuery.trim());
 
   function resetAllFilters() {
     setFilterTier("all");
     setSelectedTag("all");
+    setFilterGap("all");
+    setSortBy("score_desc");
     setSearchQuery("");
   }
 
@@ -494,28 +518,56 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
       </div>
 
       {/* Filter and Search Bar */}
-      <div className="flex flex-col sm:flex-row gap-3 items-center justify-between">
-        <div className="relative w-full sm:w-80">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
-          <input
-            type="text"
-            placeholder="Search leads by name, city, tag, or niche..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-4 h-9 rounded-lg border border-neutral-200 bg-white text-xs text-neutral-900 focus:outline-none focus:ring-2 focus:ring-primary/30 placeholder:text-neutral-400"
-          />
-          {searchQuery && (
-            <button
-              type="button"
-              onClick={() => setSearchQuery("")}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
-          )}
+      <div className="flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 flex-1 max-w-2xl">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
+            <input
+              type="text"
+              placeholder="Search leads by name, city, tag, or niche..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-8 h-9 rounded-lg border border-neutral-200 bg-white text-xs text-neutral-900 focus:outline-none focus:ring-2 focus:ring-primary/30 placeholder:text-neutral-400"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery("")}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+
+          {/* Gap Filter */}
+          <select
+            value={filterGap}
+            onChange={(e) => setFilterGap(e.target.value)}
+            className="h-9 px-3 rounded-lg border border-neutral-200 bg-white text-xs text-neutral-700 font-medium focus:outline-none focus:ring-2 focus:ring-primary/30"
+          >
+            <option value="all">All Digital Gaps</option>
+            <option value="missing_website">Missing Website</option>
+            <option value="mobile_ux">Mobile UX / Outdated</option>
+            <option value="no_reels">No Reels / Video</option>
+            <option value="low_rating">Low Rating (&lt; 4.2★)</option>
+          </select>
+
+          {/* Sort By */}
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+            className="h-9 px-3 rounded-lg border border-neutral-200 bg-white text-xs text-neutral-700 font-medium focus:outline-none focus:ring-2 focus:ring-primary/30"
+          >
+            <option value="score_desc">Score: High to Low</option>
+            <option value="score_asc">Score: Low to High</option>
+            <option value="rating_asc">Rating: Lowest First</option>
+            <option value="reviews_asc">Reviews: Fewest First</option>
+            <option value="name_asc">Name: A to Z</option>
+          </select>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 text-xs text-neutral-500 self-end sm:self-auto">
+        <div className="flex flex-wrap items-center gap-1.5 text-xs text-neutral-500 self-end md:self-auto">
           {filterTier !== "all" && (
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-neutral-100 text-neutral-800 text-[11px] font-medium border border-neutral-200">
               Tier: {filterTier}
@@ -534,13 +586,25 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
               <button
                 type="button"
                 onClick={() => setSelectedTag("all")}
-                className="hover:text-primary-focus ml-0.5"
+                className="hover:text-primary ml-0.5"
               >
                 <X className="h-3 w-3" />
               </button>
             </span>
           )}
-          <span>Showing <strong>{filteredLeads.length}</strong> of {normalizedLeads.length} leads</span>
+          {filterGap !== "all" && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-50 text-amber-800 text-[11px] font-medium border border-amber-200">
+              Gap: {filterGap.replace("_", " ")}
+              <button
+                type="button"
+                onClick={() => setFilterGap("all")}
+                className="hover:text-amber-950 ml-0.5"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          )}
+          <span className="pl-1">Showing <strong>{filteredLeads.length}</strong> of {normalizedLeads.length} leads</span>
         </div>
       </div>
 
@@ -785,7 +849,7 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
                           `${lead.businessName} ${lead.location}`
                         )}`;
                       const igSearchUrl = `https://www.google.com/search?q=${encodeURIComponent(
-                        `${lead.businessName} ${lead.location} instagram`
+                        `${lead.businessName} ${lead.location} site:instagram.com`
                       )}`;
                       const webUrl = lead.websiteUrl
                         ? lead.websiteUrl.startsWith("http")
@@ -877,6 +941,7 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
           );
         })}
       </div>
-    </div>
+    )}
+  </div>
   );
 }

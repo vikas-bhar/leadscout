@@ -22,6 +22,7 @@ import {
   Tag as TagIcon,
   Plus,
   X,
+  Search,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -480,17 +481,22 @@ export function LeadDetailView({ initialLead }: LeadDetailViewProps) {
             )}
 
             {lead.instagramHandle && (
-              <a
-                href={`https://www.instagram.com/${lead.instagramHandle.replace(/^@/, "")}/`}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-pink-200 bg-pink-50/60 text-xs font-medium text-pink-800 hover:bg-pink-100/80 transition-colors"
-                title="Open verified Instagram profile source"
-              >
-                <Camera className="h-3.5 w-3.5 text-pink-600" />
-                Instagram Source
-                <ExternalLink className="h-3 w-3 text-pink-500" />
-              </a>
+              <div className="relative inline-flex items-center">
+                <a
+                  href={`https://www.google.com/search?q=${encodeURIComponent(
+                    `${lead.businessName} ${lead.location} site:instagram.com`
+                  )}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-pink-200 bg-pink-50/70 text-xs font-semibold text-pink-800 hover:bg-pink-100 transition-colors shadow-2xs"
+                  title="Search and find active Instagram profile & Reels for this business"
+                >
+                  <Camera className="h-3.5 w-3.5 text-pink-600" />
+                  <span>Instagram</span>
+                  <span className="text-[10px] font-normal text-pink-600/80">(@{lead.instagramHandle.replace(/^@/, "")})</span>
+                  <ExternalLink className="h-3 w-3 text-pink-500 ml-0.5" />
+                </a>
+              </div>
             )}
 
             {(() => {
@@ -840,42 +846,64 @@ export function LeadDetailView({ initialLead }: LeadDetailViewProps) {
 
               {/* Instagram Source */}
               {lead.instagramHandle && (
-                <div className="p-2.5 rounded-lg border border-pink-100 bg-pink-50/40 flex flex-col gap-1.5 text-xs">
+                <div className="p-3 rounded-lg border border-pink-200/80 bg-pink-50/50 flex flex-col gap-2 text-xs">
                   <div className="flex items-center justify-between">
                     <span className="font-semibold text-pink-900 flex items-center gap-1.5">
                       <Camera className="h-3.5 w-3.5 text-pink-600" />
-                      Instagram Account
+                      Instagram Presence
                     </span>
-                    <div className="flex items-center gap-1">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          handleCopy(
-                            `https://www.instagram.com/${lead.instagramHandle?.replace(/^@/, "")}/`,
-                            "ig_url"
-                          )
-                        }
-                        className="px-2 py-0.5 rounded text-[11px] font-medium text-pink-700 hover:bg-pink-100 transition-colors flex items-center gap-1"
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleCopy(
+                          `https://www.google.com/search?q=${encodeURIComponent(
+                            `${lead.businessName} ${lead.location} site:instagram.com`
+                          )}`,
+                          "ig_url"
+                        )
+                      }
+                      className="px-2 py-0.5 rounded text-[11px] font-medium text-pink-700 hover:bg-pink-100 transition-colors flex items-center gap-1"
+                    >
+                      {copiedKey === "ig_url" ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                      Copy Search
+                    </button>
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <div className="flex items-center gap-1.5">
+                      <a
+                        href={`https://www.google.com/search?q=${encodeURIComponent(
+                          `${lead.businessName} ${lead.location} site:instagram.com`
+                        )}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex-1 py-1.5 px-2.5 rounded-md text-[11px] font-semibold text-white bg-pink-600 hover:bg-pink-700 transition-colors flex items-center justify-center gap-1.5 shadow-2xs"
+                        title="Search Google for verified Instagram profile and Reels"
                       >
-                        {copiedKey === "ig_url" ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-                        Copy
-                      </button>
+                        <Search className="h-3 w-3" />
+                        <span>Find Active Profile & Reels</span>
+                        <ExternalLink className="h-2.5 w-2.5" />
+                      </a>
+
                       <a
                         href={`https://www.instagram.com/${lead.instagramHandle.replace(/^@/, "")}/`}
                         target="_blank"
                         rel="noreferrer"
-                        className="px-2 py-0.5 rounded text-[11px] font-semibold text-white bg-pink-600 hover:bg-pink-700 transition-colors flex items-center gap-1"
+                        className="py-1.5 px-2.5 rounded-md text-[11px] font-medium text-pink-800 bg-pink-100 hover:bg-pink-200/80 transition-colors flex items-center gap-1 border border-pink-200"
+                        title="Open direct handle URL (Note: will show 'Page Not Available' if handle is unregistered)"
                       >
-                        <span>Open</span>
+                        <span>Direct @{lead.instagramHandle.replace(/^@/, "")}</span>
                         <ExternalLink className="h-2.5 w-2.5" />
                       </a>
                     </div>
+
+                    <p className="text-[10px] text-neutral-500 leading-relaxed">
+                      If the direct handle returns Instagram&apos;s &ldquo;Page Not Available&rdquo;, click <strong>Find Active Profile</strong> to view their live page, Reels, and tagged posts.
+                    </p>
                   </div>
-                  <span className="text-[11px] text-neutral-500 truncate font-mono">
-                    https://www.instagram.com/{lead.instagramHandle.replace(/^@/, "")}/
-                  </span>
-                  <span className="text-[10px] text-pink-700/80">
-                    Extracted: {lead.instagramFollowers?.toLocaleString() || "Profile"} followers, Reels status, link-in-bio & last post date
+
+                  <span className="text-[10px] text-pink-700/80 font-medium">
+                    Audited: {lead.instagramFollowers?.toLocaleString() || "Profile"} followers, Reels activity, link-in-bio & post frequency
                   </span>
                 </div>
               )}

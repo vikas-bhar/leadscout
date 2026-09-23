@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState } from "react";
-import { Compass, LogOut } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Compass, LogOut, Terminal } from "lucide-react";
 import { toast } from "sonner";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { CreditBalance } from "@/components/credits/CreditBalance";
@@ -38,6 +38,18 @@ export function Navbar() {
     router.refresh();
   }
 
+  // Hidden admin hotkey: Ctrl+Shift+D or Cmd+Shift+D
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "D" || e.key === "d")) {
+        e.preventDefault();
+        router.push("/admin/diagnostics");
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [router]);
+
   return (
     <header className="sticky top-0 z-40 border-b border-[#e5e7eb] bg-white/90 backdrop-blur">
       <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-4 px-4">
@@ -64,7 +76,19 @@ export function Navbar() {
             );
           })}
         </nav>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
+          {/* Subtle Scraper Diagnostic Tool button */}
+          <Link
+            href="/admin/diagnostics"
+            title="Scraper Diagnostics (Ctrl+Shift+D)"
+            className={cn(
+              "h-8 w-8 rounded-lg flex items-center justify-center text-neutral-400 hover:text-neutral-900 hover:bg-neutral-100 transition-colors",
+              pathname === "/admin/diagnostics" && "bg-neutral-900 text-emerald-400 hover:bg-neutral-900 hover:text-emerald-400"
+            )}
+          >
+            <Terminal className="h-3.5 w-3.5" />
+          </Link>
+
           <CreditBalance />
           <button
             type="button"

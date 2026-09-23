@@ -20,6 +20,11 @@ import {
   Plus,
   Check,
   X,
+  SlidersHorizontal,
+  ChevronDown,
+  ChevronUp,
+  RotateCcw,
+  Filter,
 } from "lucide-react";
 import {
   type Gap,
@@ -45,20 +50,44 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
   const [filterTier, setFilterTier] = useState<"all" | "high" | "medium" | "low">("all");
   const [selectedTag, setSelectedTag] = useState<string>("all");
   const [filterGap, setFilterGap] = useState<string>("all");
-  const [sortBy, setSortBy] = useState<"score_desc" | "score_asc" | "rating_asc" | "reviews_asc" | "name_asc">("score_desc");
+  const [sortBy, setSortBy] = useState<"score_desc" | "score_asc" | "location_asc" | "industry_asc" | "rating_asc" | "reviews_asc" | "name_asc">("score_desc");
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTagPickerId, setActiveTagPickerId] = useState<string | null>(null);
   const [customTagInput, setCustomTagInput] = useState("");
   const tagPickerRef = useRef<HTMLDivElement>(null);
 
+  // Advanced Filters State: Opportunity Score, Location, and Industry Type
+  const [minScore, setMinScore] = useState<number>(0);
+  const [maxScore, setMaxScore] = useState<number>(100);
+  const [selectedLocation, setSelectedLocation] = useState<string>("all");
+  const [selectedIndustry, setSelectedIndustry] = useState<string>("all");
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState<boolean>(true);
+
   useEffect(() => {
-    if (initialLeads.length > 0) {
+    const local = getLocalLeads();
+    const combinedMap = new Map<string, Lead>();
+
+    // 1. Add local leads first (they contain latest searches saved in the browser)
+    if (Array.isArray(local)) {
+      local.forEach((l) => {
+        if (l && l.id) combinedMap.set(l.id, l);
+      });
+    }
+
+    // 2. Add initialLeads (server records)
+    if (Array.isArray(initialLeads)) {
+      initialLeads.forEach((l) => {
+        if (l && l.id && !combinedMap.has(l.id)) {
+          combinedMap.set(l.id, l);
+        }
+      });
+    }
+
+    const combined = Array.from(combinedMap.values());
+    if (combined.length > 0) {
+      setLeadsList(combined);
+    } else if (initialLeads.length > 0) {
       setLeadsList(initialLeads);
-    } else {
-      const local = getLocalLeads();
-      if (local && local.length > 0) {
-        setLeadsList(local);
-      }
     }
   }, [initialLeads]);
 
@@ -202,10 +231,10 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
 
   // Unified single source of truth for Lead Opportunity Tier
   function getLeadTier(lead: Lead): "high" | "medium" | "low" {
-    if (lead.opportunityScore >= 75 || lead.urgencyLevel === "high" || lead.urgencyLevel === "critical") {
+    if (lead.opportunityScore >= 75) {
       return "high";
     }
-    if (lead.opportunityScore >= 60 || lead.urgencyLevel === "medium") {
+    if (lead.opportunityScore >= 60) {
       return "medium";
     }
     return "low";
@@ -224,67 +253,201 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
     return normalizedLeads.filter((l) => getLeadTier(l) === "low").length;
   }, [normalizedLeads]);
 
-  // Compute all available tags (presets + custom tags on leads) and their counts
+  // Compute all available tags and counts with lowercase indexing
   const tagCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     normalizedLeads.forEach((l) => {
       (l.tags || []).forEach((t) => {
         const clean = t.trim();
         if (clean) {
-          const existingKey = Object.keys(counts).find((k) => k.toLowerCase() === clean.toLowerCase());
-          const key = existingKey || clean;
-          counts[key] = (counts[key] || 0) + 1;
+          const lowerKey = clean.toLowerCase();
+          counts[lowerKey] = (counts[lowerKey] || 0) + 1;
         }
       });
     });
     return counts;
   }, [normalizedLeads]);
 
-  // Filtered leads
+  // Custom tags extracted from discovered leads
+  const customTags = useMemo(() => {
+    const presetKeys = new Set(PRESET_LEAD_TAGS.map((p) => p.id.toLowerCase()));
+    const map = new Map<string, { label: string; count: number }>();
+    normalizedLeads.forEach((l) => {
+      (l.tags || []).forEach((t) => {
+        const clean = t.trim();
+        const lower = clean.toLowerCase();
+        if (clean && !presetKeys.has(lower)) {
+          if (!map.has(lower)) {
+            map.set(lower, { label: clean, count: 1 });
+          } else {
+            const current = map.get(lower)!;
+            map.set(lower, { label: current.label, count: current.count + 1 });
+          }
+        }
+      });
+    });
+    return Array.from(map.entries()).map(([key, data]) => ({
+      key,
+      label: data.label,
+      count: data.count,
+    }));
+  }, [normalizedLeads]);
+
+  // Derived available locations with lead counts and average opportunity score
+  const availableLocations = useMemo(() => {
+    const map = new Map<string, { count: number; totalScore: number }>();
+    normalizedLeads.forEach((l) => {
+      const loc = (l.location || "").trim();
+      if (!loc) return;
+      // Extract city or district if comma-separated, or use the location string
+      const parts = loc.split(",").map((p) => p.trim()).filter(Boolean);
+      // Main locality identifier (e.g., "Austin, TX", "Dubai", "London", or district)
+      const primaryLoc = parts.length >= 2 ? `${parts[parts.length - 2]}, ${parts[parts.length - 1]}` : loc;
+      
+      const entry = map.get(primaryLoc) || map.get(loc) || { count: 0, totalScore: 0 };
+      entry.count += 1;
+      entry.totalScore += l.opportunityScore;
+      map.set(primaryLoc, entry);
+    });
+
+    return Array.from(map.entries())
+      .map(([location, data]) => ({
+        location,
+        count: data.count,
+        avgScore: Math.round(data.totalScore / data.count),
+      }))
+      .sort((a, b) => b.count - a.count || a.location.localeCompare(b.location));
+  }, [normalizedLeads]);
+
+  // Derived available industries / categories with lead counts and average opportunity score
+  const availableIndustries = useMemo(() => {
+    const map = new Map<string, { count: number; totalScore: number }>();
+    normalizedLeads.forEach((l) => {
+      const cat = (l.businessCategory || "").trim();
+      if (!cat) return;
+      const entry = map.get(cat) || { count: 0, totalScore: 0 };
+      entry.count += 1;
+      entry.totalScore += l.opportunityScore;
+      map.set(cat, entry);
+    });
+
+    return Array.from(map.entries())
+      .map(([category, data]) => ({
+        category,
+        count: data.count,
+        avgScore: Math.round(data.totalScore / data.count),
+      }))
+      .sort((a, b) => b.count - a.count || a.category.localeCompare(b.category));
+  }, [normalizedLeads]);
+
+  // Filtered leads with Opportunity Score, Location, and Industry Type filters
   const filteredLeads = useMemo(() => {
     return normalizedLeads
       .filter((l) => {
+        // 1. Tier filter
         if (filterTier !== "all") {
           if (getLeadTier(l) !== filterTier) return false;
         }
         return true;
       })
       .filter((l) => {
-        if (selectedTag === "all") return true;
-        return (l.tags || []).some(
-          (t) => t.trim().toLowerCase() === selectedTag.trim().toLowerCase()
-        );
-      })
-      .filter((l) => {
-        if (filterGap === "all") return true;
-        if (filterGap === "missing_website") {
-          return !l.websiteUrl || (l.gapsFound || []).some((g) => g.category.toLowerCase().includes("website") || g.problem.toLowerCase().includes("website"));
-        }
-        if (filterGap === "mobile_ux") {
-          return (l.gapsFound || []).some((g) => g.category.toLowerCase().includes("mobile") || g.problem.toLowerCase().includes("mobile"));
-        }
-        if (filterGap === "no_reels") {
-          return (l.gapsFound || []).some((g) => g.category.toLowerCase().includes("reels") || g.problem.toLowerCase().includes("reels") || g.category.toLowerCase().includes("video"));
-        }
-        if (filterGap === "low_rating") {
-          return l.googleRating < 4.2;
+        // 2. Opportunity Score range filter
+        if (l.opportunityScore < minScore || l.opportunityScore > maxScore) {
+          return false;
         }
         return true;
       })
       .filter((l) => {
+        // 3. Location filter
+        if (selectedLocation === "all") return true;
+        const target = selectedLocation.toLowerCase().trim();
+        const leadLoc = (l.location || "").toLowerCase().trim();
+        return leadLoc.includes(target);
+      })
+      .filter((l) => {
+        // 4. Industry Type filter
+        if (selectedIndustry === "all") return true;
+        const target = selectedIndustry.toLowerCase().trim();
+        const leadCat = (l.businessCategory || "").toLowerCase().trim();
+        return leadCat === target || leadCat.includes(target);
+      })
+      .filter((l) => {
+        // 5. Tag filter
+        if (selectedTag === "all") return true;
+        const target = selectedTag.trim().toLowerCase();
+        return (l.tags || []).some(
+          (t) => t.trim().toLowerCase() === target
+        );
+      })
+      .filter((l) => {
+        // 6. Digital Gap filter
+        if (filterGap === "all") return true;
+        if (filterGap === "missing_website") {
+          return (
+            !l.hasWebsite ||
+            !l.websiteUrl ||
+            (l.gapsFound || []).some((g) =>
+              /website|no web|online presence/i.test(g.category + " " + g.problem)
+            )
+          );
+        }
+        if (filterGap === "mobile_ux") {
+          return (l.gapsFound || []).some((g) =>
+            /mobile|speed|responsive|booking|screen|layout/i.test(
+              g.category + " " + g.problem
+            )
+          );
+        }
+        if (filterGap === "no_reels") {
+          return (
+            !l.usesReels ||
+            (l.gapsFound || []).some((g) =>
+              /reel|video|tiktok|short-form/i.test(g.category + " " + g.problem)
+            )
+          );
+        }
+        if (filterGap === "missing_instagram") {
+          return !l.instagramHandle;
+        }
+        if (filterGap === "missing_phone") {
+          return !l.phone;
+        }
+        if (filterGap === "low_rating") {
+          return l.googleRating < 4.5;
+        }
+        return true;
+      })
+      .filter((l) => {
+        // 7. Text Search query
         if (!searchQuery.trim()) return true;
         const q = searchQuery.toLowerCase().trim();
+        const cleanQueryDigits = q.replace(/[^0-9]/g, "");
+        const cleanLeadPhone = (l.phone || "").replace(/[^0-9]/g, "");
+
+        const matchesName = l.businessName.toLowerCase().includes(q);
+        const matchesLocation = l.location.toLowerCase().includes(q);
+        const matchesCategory = l.businessCategory.toLowerCase().includes(q);
+        const matchesWebsite = (l.websiteUrl || "").toLowerCase().includes(q);
+        const matchesInstagram = (l.instagramHandle || "").toLowerCase().includes(q);
+        const matchesPhone =
+          (l.phone || "").toLowerCase().includes(q) ||
+          (cleanQueryDigits.length >= 3 && cleanLeadPhone.includes(cleanQueryDigits));
         const matchesTag = (l.tags || []).some((t) => t.toLowerCase().includes(q));
         const matchesGap = (l.gapsFound || []).some(
-          (g) => g.category.toLowerCase().includes(q) || g.problem.toLowerCase().includes(q)
+          (g) =>
+            g.category.toLowerCase().includes(q) ||
+            g.problem.toLowerCase().includes(q) ||
+            (g.yourSolution || "").toLowerCase().includes(q)
         );
         const matchesService = (l.bestService || "").toLowerCase().includes(q);
+
         return (
-          l.businessName.toLowerCase().includes(q) ||
-          l.location.toLowerCase().includes(q) ||
-          l.businessCategory.toLowerCase().includes(q) ||
-          (l.phone || "").includes(q) ||
-          (l.instagramHandle || "").toLowerCase().includes(q) ||
+          matchesName ||
+          matchesLocation ||
+          matchesCategory ||
+          matchesWebsite ||
+          matchesInstagram ||
+          matchesPhone ||
           matchesTag ||
           matchesGap ||
           matchesService
@@ -292,21 +455,81 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
       })
       .sort((a, b) => {
         if (sortBy === "score_asc") return a.opportunityScore - b.opportunityScore;
+        if (sortBy === "location_asc") return a.location.localeCompare(b.location);
+        if (sortBy === "industry_asc") return a.businessCategory.localeCompare(b.businessCategory);
         if (sortBy === "rating_asc") return a.googleRating - b.googleRating;
         if (sortBy === "reviews_asc") return a.reviewCount - b.reviewCount;
         if (sortBy === "name_asc") return a.businessName.localeCompare(b.businessName);
         return b.opportunityScore - a.opportunityScore;
       });
-  }, [normalizedLeads, filterTier, selectedTag, filterGap, searchQuery, sortBy]);
+  }, [
+    normalizedLeads,
+    filterTier,
+    minScore,
+    maxScore,
+    selectedLocation,
+    selectedIndustry,
+    selectedTag,
+    filterGap,
+    searchQuery,
+    sortBy,
+  ]);
 
-  const hasActiveFilters = filterTier !== "all" || selectedTag !== "all" || filterGap !== "all" || Boolean(searchQuery.trim());
+  // Average opportunity score of the current filtered subset
+  const filteredAvgScore = useMemo(() => {
+    if (filteredLeads.length === 0) return 0;
+    const total = filteredLeads.reduce((acc, l) => acc + l.opportunityScore, 0);
+    return Math.round(total / filteredLeads.length);
+  }, [filteredLeads]);
+
+  // Count of active advanced filters
+  const activeAdvancedFilterCount = useMemo(() => {
+    let count = 0;
+    if (minScore > 0 || maxScore < 100) count++;
+    if (selectedLocation !== "all") count++;
+    if (selectedIndustry !== "all") count++;
+    return count;
+  }, [minScore, maxScore, selectedLocation, selectedIndustry]);
+
+  const hasActiveFilters =
+    filterTier !== "all" ||
+    selectedTag !== "all" ||
+    filterGap !== "all" ||
+    minScore > 0 ||
+    maxScore < 100 ||
+    selectedLocation !== "all" ||
+    selectedIndustry !== "all" ||
+    Boolean(searchQuery.trim());
 
   function resetAllFilters() {
     setFilterTier("all");
     setSelectedTag("all");
     setFilterGap("all");
+    setMinScore(0);
+    setMaxScore(100);
+    setSelectedLocation("all");
+    setSelectedIndustry("all");
     setSortBy("score_desc");
     setSearchQuery("");
+  }
+
+  function handleScorePreset(preset: "all" | "elite" | "high" | "moderate" | "low") {
+    if (preset === "all") {
+      setMinScore(0);
+      setMaxScore(100);
+    } else if (preset === "elite") {
+      setMinScore(85);
+      setMaxScore(100);
+    } else if (preset === "high") {
+      setMinScore(75);
+      setMaxScore(100);
+    } else if (preset === "moderate") {
+      setMinScore(60);
+      setMaxScore(74);
+    } else if (preset === "low") {
+      setMinScore(0);
+      setMaxScore(59);
+    }
   }
 
   if (normalizedLeads.length === 0) {
@@ -454,7 +677,7 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
           </button>
 
           {PRESET_LEAD_TAGS.map((preset) => {
-            const count = tagCounts[preset.id] || 0;
+            const count = tagCounts[preset.id.toLowerCase()] || 0;
             const isSelected = selectedTag.toLowerCase() === preset.id.toLowerCase();
             return (
               <button
@@ -485,91 +708,518 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
           })}
 
           {/* Any custom tags present in discovered leads */}
-          {Object.entries(tagCounts)
-            .filter(([tag]) => !PRESET_LEAD_TAGS.some((p) => p.id.toLowerCase() === tag.toLowerCase()))
-            .map(([tag, count]) => {
-              const isSelected = selectedTag.toLowerCase() === tag.toLowerCase();
-              return (
-                <button
-                  key={tag}
-                  type="button"
-                  onClick={() => setSelectedTag(isSelected ? "all" : tag)}
+          {customTags.map(({ key, label, count }) => {
+            const isSelected = selectedTag.toLowerCase() === key;
+            return (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setSelectedTag(isSelected ? "all" : label)}
+                className={cn(
+                  "inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium transition-all border",
+                  isSelected
+                    ? "bg-primary/10 text-primary border-primary ring-2 ring-offset-1 ring-primary/40 font-semibold shadow-sm"
+                    : "bg-white text-neutral-700 hover:bg-neutral-50 border-neutral-200"
+                )}
+              >
+                <TagIcon className="h-2.5 w-2.5 text-neutral-400" />
+                {label}
+                <span
                   className={cn(
-                    "inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium transition-all border",
-                    isSelected
-                      ? "bg-primary/10 text-primary border-primary ring-2 ring-offset-1 ring-primary/40 font-semibold shadow-sm"
-                      : "bg-white text-neutral-700 hover:bg-neutral-50 border-neutral-200"
+                    "px-1.5 py-0.2 rounded-full text-[10px]",
+                    isSelected ? "bg-white text-neutral-900 font-bold" : "bg-neutral-100 text-neutral-600"
                   )}
                 >
-                  <TagIcon className="h-2.5 w-2.5 text-neutral-400" />
-                  {tag}
-                  <span
-                    className={cn(
-                      "px-1.5 py-0.2 rounded-full text-[10px]",
-                      isSelected ? "bg-white text-neutral-900 font-bold" : "bg-neutral-100 text-neutral-600"
-                    )}
-                  >
-                    {count}
-                  </span>
-                </button>
-              );
-            })}
+                  {count}
+                </span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
       {/* Filter and Search Bar */}
-      <div className="flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 flex-1 max-w-2xl">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
-            <input
-              type="text"
-              placeholder="Search leads by name, city, tag, or niche..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-8 h-9 rounded-lg border border-neutral-200 bg-white text-xs text-neutral-900 focus:outline-none focus:ring-2 focus:ring-primary/30 placeholder:text-neutral-400"
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={() => setSearchQuery("")}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            )}
+      <div className="space-y-3">
+        <div className="flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 flex-1 max-w-3xl">
+            {/* Text Search */}
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
+              <input
+                type="text"
+                placeholder="Search by business name, city, phone, category, tag, or gap..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-9 pr-8 h-9 rounded-lg border border-neutral-200 bg-white text-xs text-neutral-900 focus:outline-none focus:ring-2 focus:ring-primary/30 placeholder:text-neutral-400"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+
+            {/* Advanced Filters Toggle Button */}
+            <button
+              type="button"
+              onClick={() => setShowAdvancedFilters((prev) => !prev)}
+              className={cn(
+                "h-9 px-3 rounded-lg border text-xs font-semibold inline-flex items-center gap-2 transition-all select-none shrink-0",
+                showAdvancedFilters
+                  ? "bg-neutral-900 text-white border-neutral-900 shadow-sm"
+                  : activeAdvancedFilterCount > 0
+                  ? "bg-primary/10 text-primary border-primary/30 hover:bg-primary/15"
+                  : "bg-white text-neutral-700 border-neutral-200 hover:bg-neutral-50"
+              )}
+            >
+              <SlidersHorizontal className="h-3.5 w-3.5" />
+              <span>Filters</span>
+              {activeAdvancedFilterCount > 0 && (
+                <span
+                  className={cn(
+                    "px-1.5 py-0.2 rounded-full text-[10px] font-bold",
+                    showAdvancedFilters ? "bg-white text-neutral-900" : "bg-primary text-white"
+                  )}
+                >
+                  {activeAdvancedFilterCount}
+                </span>
+              )}
+              {showAdvancedFilters ? (
+                <ChevronUp className="h-3.5 w-3.5 opacity-70" />
+              ) : (
+                <ChevronDown className="h-3.5 w-3.5 opacity-70" />
+              )}
+            </button>
+
+            {/* Digital Gap Filter */}
+            <select
+              value={filterGap}
+              onChange={(e) => setFilterGap(e.target.value)}
+              className="h-9 px-3 rounded-lg border border-neutral-200 bg-white text-xs text-neutral-700 font-medium focus:outline-none focus:ring-2 focus:ring-primary/30 shrink-0"
+            >
+              <option value="all">All Digital Gaps</option>
+              <option value="missing_website">Missing Website</option>
+              <option value="mobile_ux">Mobile UX / Outdated</option>
+              <option value="no_reels">No Reels / Video</option>
+              <option value="missing_instagram">No Instagram Handle</option>
+              <option value="missing_phone">No Phone Listed</option>
+              <option value="low_rating">Suboptimal Rating (&lt; 4.5★)</option>
+            </select>
+
+            {/* Sort Dropdown */}
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+              className="h-9 px-3 rounded-lg border border-neutral-200 bg-white text-xs text-neutral-700 font-medium focus:outline-none focus:ring-2 focus:ring-primary/30 shrink-0"
+            >
+              <option value="score_desc">Score: High to Low</option>
+              <option value="score_asc">Score: Low to High</option>
+              <option value="location_asc">Location: A to Z</option>
+              <option value="industry_asc">Industry: A to Z</option>
+              <option value="rating_asc">Rating: Lowest First</option>
+              <option value="reviews_asc">Reviews: Fewest First</option>
+              <option value="name_asc">Name: A to Z</option>
+            </select>
           </div>
 
-          {/* Gap Filter */}
-          <select
-            value={filterGap}
-            onChange={(e) => setFilterGap(e.target.value)}
-            className="h-9 px-3 rounded-lg border border-neutral-200 bg-white text-xs text-neutral-700 font-medium focus:outline-none focus:ring-2 focus:ring-primary/30"
-          >
-            <option value="all">All Digital Gaps</option>
-            <option value="missing_website">Missing Website</option>
-            <option value="mobile_ux">Mobile UX / Outdated</option>
-            <option value="no_reels">No Reels / Video</option>
-            <option value="low_rating">Low Rating (&lt; 4.2★)</option>
-          </select>
-
-          {/* Sort By */}
-          <select
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
-            className="h-9 px-3 rounded-lg border border-neutral-200 bg-white text-xs text-neutral-700 font-medium focus:outline-none focus:ring-2 focus:ring-primary/30"
-          >
-            <option value="score_desc">Score: High to Low</option>
-            <option value="score_asc">Score: Low to High</option>
-            <option value="rating_asc">Rating: Lowest First</option>
-            <option value="reviews_asc">Reviews: Fewest First</option>
-            <option value="name_asc">Name: A to Z</option>
-          </select>
+          <div className="flex items-center gap-2 self-end md:self-auto text-xs text-neutral-500">
+            {hasActiveFilters && (
+              <button
+                type="button"
+                onClick={resetAllFilters}
+                className="inline-flex items-center gap-1 text-[11px] font-semibold text-neutral-600 hover:text-neutral-900 transition-colors mr-1"
+              >
+                <RotateCcw className="h-3 w-3" />
+                Clear All
+              </button>
+            )}
+            <span className="text-xs text-neutral-500">
+              Showing <strong>{filteredLeads.length}</strong> of {normalizedLeads.length} leads
+            </span>
+          </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-1.5 text-xs text-neutral-500 self-end md:self-auto">
+        {/* Expanded Advanced Filters Panel */}
+        {showAdvancedFilters && (
+          <div className="p-4 rounded-xl border border-neutral-200/90 bg-neutral-50/60 shadow-sm space-y-4 animate-in fade-in-50 duration-200">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-neutral-200/70 pb-3">
+              <div className="flex items-center gap-2">
+                <span className="flex h-6 w-6 items-center justify-center rounded-md bg-primary/10 text-primary">
+                  <Filter className="h-3.5 w-3.5" />
+                </span>
+                <span className="text-xs font-bold uppercase tracking-wider text-neutral-800">
+                  Advanced Filters: Prioritize High-Potential Deals
+                </span>
+              </div>
+              <div className="flex items-center gap-3 text-xs text-neutral-500">
+                <span>
+                  Matches: <strong className="text-neutral-900">{filteredLeads.length}</strong>
+                </span>
+                <span className="text-neutral-300">•</span>
+                <span>
+                  Avg Opp Score:{" "}
+                  <strong
+                    className={cn(
+                      filteredAvgScore >= 75
+                        ? "text-rose-600"
+                        : filteredAvgScore >= 60
+                        ? "text-amber-600"
+                        : "text-neutral-800"
+                    )}
+                  >
+                    {filteredAvgScore}/100
+                  </strong>
+                </span>
+                {activeAdvancedFilterCount > 0 && (
+                  <>
+                    <span className="text-neutral-300">•</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMinScore(0);
+                        setMaxScore(100);
+                        setSelectedLocation("all");
+                        setSelectedIndustry("all");
+                      }}
+                      className="text-primary hover:underline font-medium text-[11px]"
+                    >
+                      Reset Advanced
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* 3 Advanced Filter Controls Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Filter 1: Opportunity Score */}
+              <div className="p-3.5 rounded-lg border border-neutral-200 bg-white space-y-3 shadow-xs">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-xs font-semibold text-neutral-800">
+                    <TrendingUp className="h-4 w-4 text-rose-500" />
+                    <span>Opportunity Score</span>
+                  </div>
+                  <span
+                    className={cn(
+                      "px-2 py-0.5 rounded text-[11px] font-bold border",
+                      minScore >= 80
+                        ? "bg-rose-50 text-rose-700 border-rose-200"
+                        : minScore >= 65
+                        ? "bg-amber-50 text-amber-700 border-amber-200"
+                        : "bg-neutral-100 text-neutral-700 border-neutral-200"
+                    )}
+                  >
+                    {minScore === 0 && maxScore === 100
+                      ? "All Scores (0–100)"
+                      : minScore > 0 && maxScore === 100
+                      ? `Score ≥ ${minScore}`
+                      : `${minScore} – ${maxScore}`}
+                  </span>
+                </div>
+
+                {/* Score Presets */}
+                <div className="flex flex-wrap gap-1">
+                  <button
+                    type="button"
+                    onClick={() => handleScorePreset("all")}
+                    className={cn(
+                      "px-2 py-1 rounded text-[11px] font-medium transition-colors border",
+                      minScore === 0 && maxScore === 100
+                        ? "bg-neutral-900 text-white border-neutral-900 font-semibold"
+                        : "bg-neutral-50 text-neutral-600 hover:bg-neutral-100 border-neutral-200"
+                    )}
+                  >
+                    All
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleScorePreset("elite")}
+                    className={cn(
+                      "px-2 py-1 rounded text-[11px] font-medium transition-colors border",
+                      minScore === 85 && maxScore === 100
+                        ? "bg-rose-600 text-white border-rose-600 font-semibold shadow-xs"
+                        : "bg-rose-50/70 text-rose-700 hover:bg-rose-100/70 border-rose-200"
+                    )}
+                  >
+                    85+ Elite
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleScorePreset("high")}
+                    className={cn(
+                      "px-2 py-1 rounded text-[11px] font-medium transition-colors border",
+                      minScore === 75 && maxScore === 100
+                        ? "bg-rose-500 text-white border-rose-500 font-semibold shadow-xs"
+                        : "bg-rose-50/50 text-rose-700 hover:bg-rose-100/50 border-rose-200"
+                    )}
+                  >
+                    75+ High
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleScorePreset("moderate")}
+                    className={cn(
+                      "px-2 py-1 rounded text-[11px] font-medium transition-colors border",
+                      minScore === 60 && maxScore === 74
+                        ? "bg-amber-600 text-white border-amber-600 font-semibold shadow-xs"
+                        : "bg-amber-50 text-amber-700 hover:bg-amber-100 border-amber-200"
+                    )}
+                  >
+                    60–74 Medium
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleScorePreset("low")}
+                    className={cn(
+                      "px-2 py-1 rounded text-[11px] font-medium transition-colors border",
+                      minScore === 0 && maxScore === 59
+                        ? "bg-neutral-700 text-white border-neutral-700 font-semibold shadow-xs"
+                        : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200 border-neutral-200"
+                    )}
+                  >
+                    &lt; 60 Low
+                  </button>
+                </div>
+
+                {/* Score Slider */}
+                <div className="space-y-1 pt-1">
+                  <div className="flex justify-between text-[10px] text-neutral-400 font-medium">
+                    <span>Min Score: {minScore}</span>
+                    <span>Max: {maxScore}</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    step="5"
+                    value={minScore}
+                    onChange={(e) => {
+                      const val = Number(e.target.value);
+                      setMinScore(val);
+                      if (val > maxScore) setMaxScore(100);
+                    }}
+                    className="w-full h-1.5 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-rose-600"
+                  />
+                  <div className="flex justify-between text-[9px] text-neutral-400">
+                    <span>0</span>
+                    <span className="text-amber-600 font-semibold">60 (Medium)</span>
+                    <span className="text-rose-600 font-semibold">75 (High)</span>
+                    <span className="text-rose-700 font-semibold">85 (Elite)</span>
+                    <span>100</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Filter 2: Location */}
+              <div className="p-3.5 rounded-lg border border-neutral-200 bg-white space-y-3 shadow-xs">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-xs font-semibold text-neutral-800">
+                    <MapPin className="h-4 w-4 text-emerald-600" />
+                    <span>Location / Territory</span>
+                  </div>
+                  <span className="text-[11px] text-neutral-400 font-medium">
+                    {availableLocations.length} areas
+                  </span>
+                </div>
+
+                {/* Location Select Dropdown */}
+                <select
+                  value={selectedLocation}
+                  onChange={(e) => setSelectedLocation(e.target.value)}
+                  className="w-full h-8 px-2.5 rounded-lg border border-neutral-200 bg-white text-xs text-neutral-800 font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+                >
+                  <option value="all">All Locations ({normalizedLeads.length} leads)</option>
+                  {availableLocations.map((loc) => (
+                    <option key={loc.location} value={loc.location}>
+                      {loc.location} ({loc.count} leads • avg score {loc.avgScore})
+                    </option>
+                  ))}
+                </select>
+
+                {/* Top Location Quick Chips */}
+                <div className="space-y-1">
+                  <div className="text-[10px] uppercase tracking-wider font-semibold text-neutral-400">
+                    Top Territories:
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedLocation("all")}
+                      className={cn(
+                        "px-2 py-0.5 rounded text-[11px] font-medium transition-colors border",
+                        selectedLocation === "all"
+                          ? "bg-emerald-600 text-white border-emerald-600 font-semibold"
+                          : "bg-neutral-50 text-neutral-600 hover:bg-neutral-100 border-neutral-200"
+                      )}
+                    >
+                      All
+                    </button>
+                    {availableLocations.slice(0, 4).map((loc) => {
+                      const isSelected = selectedLocation.toLowerCase() === loc.location.toLowerCase();
+                      return (
+                        <button
+                          key={loc.location}
+                          type="button"
+                          onClick={() => setSelectedLocation(isSelected ? "all" : loc.location)}
+                          className={cn(
+                            "px-2 py-0.5 rounded text-[11px] font-medium transition-colors border truncate max-w-[140px]",
+                            isSelected
+                              ? "bg-emerald-50 text-emerald-800 border-emerald-300 ring-1 ring-emerald-400 font-semibold"
+                              : "bg-white text-neutral-700 hover:bg-neutral-50 border-neutral-200"
+                          )}
+                          title={`${loc.location} (${loc.count} leads)`}
+                        >
+                          {loc.location.split(",")[0]}
+                          <span className="ml-1 text-[10px] text-neutral-400 font-normal">
+                            ({loc.count})
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              {/* Filter 3: Industry Type */}
+              <div className="p-3.5 rounded-lg border border-neutral-200 bg-white space-y-3 shadow-xs">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-xs font-semibold text-neutral-800">
+                    <Building2 className="h-4 w-4 text-blue-600" />
+                    <span>Industry Type / Niche</span>
+                  </div>
+                  <span className="text-[11px] text-neutral-400 font-medium">
+                    {availableIndustries.length} industries
+                  </span>
+                </div>
+
+                {/* Industry Select Dropdown */}
+                <select
+                  value={selectedIndustry}
+                  onChange={(e) => setSelectedIndustry(e.target.value)}
+                  className="w-full h-8 px-2.5 rounded-lg border border-neutral-200 bg-white text-xs text-neutral-800 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                >
+                  <option value="all">All Industries ({normalizedLeads.length} leads)</option>
+                  {availableIndustries.map((ind) => (
+                    <option key={ind.category} value={ind.category}>
+                      {ind.category} ({ind.count} leads • avg score {ind.avgScore})
+                    </option>
+                  ))}
+                </select>
+
+                {/* Top Industry Quick Chips */}
+                <div className="space-y-1">
+                  <div className="text-[10px] uppercase tracking-wider font-semibold text-neutral-400">
+                    Top Niches:
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedIndustry("all")}
+                      className={cn(
+                        "px-2 py-0.5 rounded text-[11px] font-medium transition-colors border",
+                        selectedIndustry === "all"
+                          ? "bg-blue-600 text-white border-blue-600 font-semibold"
+                          : "bg-neutral-50 text-neutral-600 hover:bg-neutral-100 border-neutral-200"
+                      )}
+                    >
+                      All
+                    </button>
+                    {availableIndustries.slice(0, 4).map((ind) => {
+                      const isSelected = selectedIndustry.toLowerCase() === ind.category.toLowerCase();
+                      return (
+                        <button
+                          key={ind.category}
+                          type="button"
+                          onClick={() => setSelectedIndustry(isSelected ? "all" : ind.category)}
+                          className={cn(
+                            "px-2 py-0.5 rounded text-[11px] font-medium transition-colors border truncate max-w-[140px]",
+                            isSelected
+                              ? "bg-blue-50 text-blue-800 border-blue-300 ring-1 ring-blue-400 font-semibold"
+                              : "bg-white text-neutral-700 hover:bg-neutral-50 border-neutral-200"
+                          )}
+                          title={`${ind.category} (${ind.count} leads)`}
+                        >
+                          {ind.category}
+                          <span className="ml-1 text-[10px] text-neutral-400 font-normal">
+                            ({ind.count})
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Active Filters Badges Strip */}
+        <div className="flex flex-wrap items-center gap-1.5 text-xs text-neutral-600 pt-1">
+          {minScore > 0 && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-rose-50 text-rose-800 text-[11px] font-semibold border border-rose-200 animate-in fade-in-50">
+              <TrendingUp className="h-3 w-3 text-rose-600" />
+              Score ≥ {minScore}
+              <button
+                type="button"
+                onClick={() => setMinScore(0)}
+                className="hover:text-rose-950 ml-0.5"
+                title="Remove score filter"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          )}
+
+          {maxScore < 100 && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-neutral-100 text-neutral-800 text-[11px] font-medium border border-neutral-200 animate-in fade-in-50">
+              Score ≤ {maxScore}
+              <button
+                type="button"
+                onClick={() => setMaxScore(100)}
+                className="hover:text-neutral-950 ml-0.5"
+                title="Remove max score filter"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          )}
+
+          {selectedLocation !== "all" && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-emerald-50 text-emerald-800 text-[11px] font-semibold border border-emerald-200 animate-in fade-in-50">
+              <MapPin className="h-3 w-3 text-emerald-600" />
+              Location: {selectedLocation}
+              <button
+                type="button"
+                onClick={() => setSelectedLocation("all")}
+                className="hover:text-emerald-950 ml-0.5"
+                title="Clear location filter"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          )}
+
+          {selectedIndustry !== "all" && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-blue-50 text-blue-800 text-[11px] font-semibold border border-blue-200 animate-in fade-in-50">
+              <Building2 className="h-3 w-3 text-blue-600" />
+              Industry: {selectedIndustry}
+              <button
+                type="button"
+                onClick={() => setSelectedIndustry("all")}
+                className="hover:text-blue-950 ml-0.5"
+                title="Clear industry filter"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          )}
+
           {filterTier !== "all" && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-neutral-100 text-neutral-800 text-[11px] font-medium border border-neutral-200">
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-neutral-100 text-neutral-800 text-[11px] font-medium border border-neutral-200">
               Tier: {filterTier}
               <button
                 type="button"
@@ -580,8 +1230,9 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
               </button>
             </span>
           )}
+
           {selectedTag !== "all" && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-primary/10 text-primary text-[11px] font-medium border border-primary/20">
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-primary/10 text-primary text-[11px] font-medium border border-primary/20">
               Tag: {selectedTag}
               <button
                 type="button"
@@ -592,8 +1243,9 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
               </button>
             </span>
           )}
+
           {filterGap !== "all" && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-50 text-amber-800 text-[11px] font-medium border border-amber-200">
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-amber-50 text-amber-800 text-[11px] font-medium border border-amber-200">
               Gap: {filterGap.replace("_", " ")}
               <button
                 type="button"
@@ -604,7 +1256,30 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
               </button>
             </span>
           )}
-          <span className="pl-1">Showing <strong>{filteredLeads.length}</strong> of {normalizedLeads.length} leads</span>
+
+          {searchQuery && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-neutral-100 text-neutral-800 text-[11px] font-medium border border-neutral-200">
+              Keyword: &quot;{searchQuery}&quot;
+              <button
+                type="button"
+                onClick={() => setSearchQuery("")}
+                className="hover:text-red-600 ml-0.5"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          )}
+
+          {hasActiveFilters && (
+            <button
+              type="button"
+              onClick={resetAllFilters}
+              className="text-[11px] text-primary hover:underline font-semibold ml-1 inline-flex items-center gap-1"
+            >
+              <RotateCcw className="h-3 w-3" />
+              Reset All
+            </button>
+          )}
         </div>
       </div>
 
@@ -614,13 +1289,18 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
           <div className="h-10 w-10 mx-auto rounded-full bg-neutral-100 flex items-center justify-center text-neutral-400">
             <Search className="h-5 w-5" />
           </div>
-          <p className="text-sm font-semibold text-neutral-800">No leads match your active filters</p>
-          <p className="text-xs text-neutral-500 max-w-sm mx-auto">
-            Try adjusting your search query, switching tags, or clearing the opportunity tier filter.
+          <p className="text-sm font-semibold text-neutral-800">No leads match your filter criteria</p>
+          <p className="text-xs text-neutral-500 max-w-md mx-auto">
+            {minScore > 0 || selectedLocation !== "all" || selectedIndustry !== "all"
+              ? `No leads found with ${minScore > 0 ? `Score ≥ ${minScore}` : ""}${selectedLocation !== "all" ? ` in ${selectedLocation}` : ""}${selectedIndustry !== "all" ? ` under ${selectedIndustry}` : ""}. Try lowering the minimum score or clearing territory/niche filters.`
+              : "Try adjusting your search query, switching tags, or clearing the opportunity tier filter."}
           </p>
-          <Button size="sm" variant="outline" onClick={resetAllFilters} className="text-xs font-semibold">
-            Reset All Filters
-          </Button>
+          <div className="flex items-center justify-center gap-2 pt-1">
+            <Button size="sm" variant="outline" onClick={resetAllFilters} className="text-xs font-semibold gap-1.5">
+              <RotateCcw className="h-3.5 w-3.5" />
+              Reset All Filters
+            </Button>
+          </div>
         </div>
       ) : (
         <div className="space-y-3">

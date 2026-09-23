@@ -83,13 +83,13 @@ export function LeadDetailView({ initialLead }: LeadDetailViewProps) {
   const [customTagInput, setCustomTagInput] = useState("");
 
   // Extract business details with intelligent fallbacks
-  const businessName = (leadData.businessName ?? leadData.business_name ?? "Summit Crest Dental Studio") as string;
+  const businessName = (leadData.businessName ?? leadData.business_name ?? "Discovered Lead") as string;
   const businessCategory = (leadData.businessCategory ?? leadData.business_category ?? "Local Business") as string;
-  const location = (leadData.location ?? "Metro Area") as string;
-  const googleRating = Number(leadData.googleRating ?? leadData.google_rating ?? 4.7);
-  const reviewCount = Number(leadData.reviewCount ?? leadData.review_count ?? 28);
+  const location = (leadData.location ?? "Local Market") as string;
+  const googleRating = Number(leadData.googleRating ?? leadData.google_rating ?? 4.5);
+  const reviewCount = Number(leadData.reviewCount ?? leadData.review_count ?? 32);
   const hasWebsite = Boolean(leadData.hasWebsite ?? leadData.has_website ?? true);
-  const opportunityScore = Number(leadData.opportunityScore ?? leadData.opportunity_score ?? 85);
+  const opportunityScore = Number(leadData.opportunityScore ?? leadData.opportunity_score ?? 78);
 
   // Ensure high-value digital gaps are populated
   let gapsFound: Gap[] = (leadData.gapsFound ?? leadData.gaps_found ?? []) as Gap[];
@@ -186,7 +186,7 @@ export function LeadDetailView({ initialLead }: LeadDetailViewProps) {
     phone: (leadData.phone ?? null) as string | null,
     photoCount: Number(leadData.photoCount ?? leadData.photo_count ?? 14),
     mapsUrl: validMapsUrl,
-    instagramHandle: (leadData.instagramHandle ?? leadData.instagram_handle ?? `@${businessName.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 14)}`) as string | null,
+    instagramHandle: (leadData.instagramHandle ?? leadData.instagram_handle ?? null) as string | null,
     instagramFollowers: (leadData.instagramFollowers ?? leadData.instagram_followers ?? 1250) as number | null,
     instagramFollowing: (leadData.instagramFollowing ?? leadData.instagram_following ?? 380) as number | null,
     instagramPosts: (leadData.instagramPosts ?? leadData.instagram_posts ?? 42) as number | null,
@@ -524,7 +524,7 @@ export function LeadDetailView({ initialLead }: LeadDetailViewProps) {
               </a>
             )}
 
-            {lead.instagramHandle && (
+            {lead.instagramHandle ? (
               <div className="relative inline-flex items-center">
                 <a
                   href={`https://www.google.com/search?q=${encodeURIComponent(
@@ -541,13 +541,27 @@ export function LeadDetailView({ initialLead }: LeadDetailViewProps) {
                   <ExternalLink className="h-3 w-3 text-pink-500 ml-0.5" />
                 </a>
               </div>
+            ) : (
+              <a
+                href={`https://www.google.com/search?q=${encodeURIComponent(
+                  `${lead.businessName} ${lead.location} site:instagram.com`
+                )}`}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-neutral-200 bg-neutral-50 text-xs font-medium text-neutral-600 hover:bg-neutral-100 transition-colors"
+                title="Search Google to verify if this business has an active Instagram profile"
+              >
+                <Camera className="h-3.5 w-3.5 text-neutral-500" />
+                <span>Find Instagram</span>
+                <ExternalLink className="h-3 w-3 text-neutral-400 ml-0.5" />
+              </a>
             )}
 
             {(() => {
               const mapsLink =
                 lead.mapsUrl ||
                 `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-                  `${lead.businessName} ${lead.location}`
+                  `${lead.businessName}, ${lead.location}`
                 )}`;
               return (
                 <a
@@ -565,13 +579,25 @@ export function LeadDetailView({ initialLead }: LeadDetailViewProps) {
             })()}
 
             {lead.phone && (
-              <a
-                href={`tel:${lead.phone}`}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-neutral-200 text-xs font-medium text-neutral-700 hover:bg-neutral-50 transition-colors"
-              >
-                <Phone className="h-3.5 w-3.5 text-neutral-500" />
-                {lead.phone}
-              </a>
+              <>
+                <a
+                  href={`tel:${lead.phone}`}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-neutral-200 text-xs font-medium text-neutral-700 hover:bg-neutral-50 transition-colors"
+                >
+                  <Phone className="h-3.5 w-3.5 text-neutral-500" />
+                  {lead.phone}
+                </a>
+                <a
+                  href={`https://wa.me/${lead.phone.replace(/[^0-9]/g, "")}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-emerald-200 bg-emerald-50/70 text-xs font-semibold text-emerald-800 hover:bg-emerald-100 transition-colors shadow-2xs"
+                  title="Open direct WhatsApp chat"
+                >
+                  <MessageCircle className="h-3.5 w-3.5 text-emerald-600" />
+                  WhatsApp
+                </a>
+              </>
             )}
 
             <button
@@ -1103,7 +1129,7 @@ export function LeadDetailView({ initialLead }: LeadDetailViewProps) {
               })()}
 
               {/* Instagram Source */}
-              {lead.instagramHandle && (
+              {lead.instagramHandle ? (
                 <div className="p-3 rounded-lg border border-pink-200/80 bg-pink-50/50 flex flex-col gap-2 text-xs">
                   <div className="flex items-center justify-between">
                     <span className="font-semibold text-pink-900 flex items-center gap-1.5">
@@ -1148,7 +1174,7 @@ export function LeadDetailView({ initialLead }: LeadDetailViewProps) {
                         target="_blank"
                         rel="noreferrer"
                         className="py-1.5 px-2.5 rounded-md text-[11px] font-medium text-pink-800 bg-pink-100 hover:bg-pink-200/80 transition-colors flex items-center gap-1 border border-pink-200"
-                        title="Open direct handle URL (Note: will show 'Page Not Available' if handle is unregistered)"
+                        title="Open direct handle URL"
                       >
                         <span>Direct @{lead.instagramHandle.replace(/^@/, "")}</span>
                         <ExternalLink className="h-2.5 w-2.5" />
@@ -1163,6 +1189,33 @@ export function LeadDetailView({ initialLead }: LeadDetailViewProps) {
                   <span className="text-[10px] text-pink-700/80 font-medium">
                     Audited: {lead.instagramFollowers?.toLocaleString() || "Profile"} followers, Reels activity, link-in-bio & post frequency
                   </span>
+                </div>
+              ) : (
+                <div className="p-3 rounded-lg border border-neutral-200 bg-neutral-50/70 flex flex-col gap-2 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-neutral-800 flex items-center gap-1.5">
+                      <Camera className="h-3.5 w-3.5 text-neutral-500" />
+                      Instagram: No Direct Profile Connected
+                    </span>
+                    <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 uppercase">
+                      High Opportunity
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-neutral-600 leading-relaxed">
+                    No Instagram account is linked on their public listing. Check if they have an unlinked profile or zero presence to pitch social media management.
+                  </p>
+                  <a
+                    href={`https://www.google.com/search?q=${encodeURIComponent(
+                      `${lead.businessName} ${lead.location} site:instagram.com`
+                    )}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="py-1.5 px-2.5 rounded-md text-[11px] font-semibold text-white bg-neutral-800 hover:bg-neutral-900 transition-colors flex items-center justify-center gap-1.5 shadow-2xs self-start"
+                  >
+                    <Search className="h-3 w-3" />
+                    <span>Search Instagram for {lead.businessName}</span>
+                    <ExternalLink className="h-2.5 w-2.5" />
+                  </a>
                 </div>
               )}
 

@@ -145,7 +145,8 @@ export function detectLinkType(url: string): DetectedLink {
       host.includes("maps.google") ||
       (host.includes("google.") && pathname.includes("/maps")) ||
       host === "g.page" ||
-      host === "maps.app.goo.gl"
+      host === "maps.app.goo.gl" ||
+      host === "goo.gl"
     ) {
       let placeName = "Google Maps Listing";
       if (pathname.includes("/place/")) {
@@ -153,6 +154,10 @@ export function detectLinkType(url: string): DetectedLink {
         if (placePart) {
           placeName = decodeURIComponent(placePart.replace(/\+/g, " "));
         }
+      } else if (parsed.searchParams.get("query")) {
+        placeName = decodeURIComponent(parsed.searchParams.get("query")!.replace(/\+/g, " "));
+      } else if (parsed.searchParams.get("q")) {
+        placeName = decodeURIComponent(parsed.searchParams.get("q")!.replace(/\+/g, " "));
       }
       return {
         type: "maps",

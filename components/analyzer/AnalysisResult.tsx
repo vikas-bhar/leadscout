@@ -20,6 +20,7 @@ import {
   Globe,
   MapPin,
   Share2,
+  Phone,
 } from "lucide-react";
 import { toast } from "sonner";
 import { type AnalyzerResultData, type Lead } from "@/types";
@@ -142,15 +143,46 @@ export function AnalysisResult({ analysis, lead, onReset }: AnalysisResultProps)
                   {analysis.linkType} Audit
                 </span>
               </div>
-              <a
-                href={analysis.targetUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="text-xs text-primary hover:underline flex items-center gap-1 mt-0.5"
-              >
-                <span className="truncate max-w-sm">{analysis.targetUrl}</span>
-                <ExternalLink className="h-3 w-3 shrink-0" />
-              </a>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-xs text-neutral-500">
+                <a
+                  href={analysis.targetUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-primary hover:underline flex items-center gap-1 font-medium"
+                >
+                  <span className="truncate max-w-[200px] sm:max-w-xs">{analysis.targetUrl}</span>
+                  <ExternalLink className="h-3 w-3 shrink-0" />
+                </a>
+
+                {lead?.location && lead.location !== "Direct URL Analysis" && (
+                  <span className="flex items-center gap-1 text-neutral-600">
+                    <MapPin className="h-3 w-3 text-emerald-600 shrink-0" />
+                    <span className="truncate max-w-[220px]">{lead.location}</span>
+                  </span>
+                )}
+
+                {lead?.phone && (
+                  <a
+                    href={`tel:${lead.phone}`}
+                    className="flex items-center gap-1 text-neutral-700 hover:text-primary font-medium"
+                  >
+                    <Phone className="h-3 w-3 text-blue-600 shrink-0" />
+                    <span>{lead.phone}</span>
+                  </a>
+                )}
+
+                {lead?.instagramHandle && (
+                  <a
+                    href={`https://instagram.com/${lead.instagramHandle.replace("@", "")}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center gap-1 text-pink-600 hover:underline font-medium"
+                  >
+                    <Camera className="h-3 w-3 shrink-0" />
+                    <span>{lead.instagramHandle}</span>
+                  </a>
+                )}
+              </div>
             </div>
           </div>
 

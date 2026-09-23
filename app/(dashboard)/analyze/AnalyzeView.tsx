@@ -13,6 +13,7 @@ import {
   Globe,
   MapPin,
   Share2,
+  Terminal,
 } from "lucide-react";
 import { toast } from "sonner";
 import { detectLinkType } from "@/lib/analyzer/detectLink";
@@ -200,7 +201,15 @@ export function AnalyzeView({ initialAvailableCredits }: AnalyzeViewProps) {
           </p>
         </div>
 
-        <div className="flex items-center gap-3 self-start sm:self-auto">
+        <div className="flex items-center gap-2.5 self-start sm:self-auto">
+          <Link
+            href="/admin/diagnostics"
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-neutral-200 bg-white text-xs font-medium text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50 transition-colors"
+            title="Scraper Diagnostics and Raw Response Inspector"
+          >
+            <Terminal className="h-3.5 w-3.5 text-emerald-600" />
+            <span className="hidden sm:inline">Scraper Diagnostics</span>
+          </Link>
           <div className="rounded-lg bg-neutral-100/80 border border-neutral-200/70 px-3 py-1.5 text-xs text-neutral-600 flex items-center gap-2">
             <Coins className="h-4 w-4 text-primary" />
             <span>

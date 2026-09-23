@@ -90,7 +90,7 @@ Return pure JSON only (no markdown, no backticks, no code fence):
   if (ai) {
     try {
       const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
+        model: "gemini-3.8-flash",
         contents: prompt,
         config: {
           responseMimeType: "application/json",
@@ -260,7 +260,7 @@ Return pure JSON only (no markdown, no backticks):
   if (ai) {
     try {
       const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
+        model: "gemini-3.8-flash",
         contents: prompt,
         config: { responseMimeType: "application/json" },
       });

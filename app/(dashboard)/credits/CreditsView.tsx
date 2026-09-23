@@ -1,14 +1,14 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Coins, Check, History, Sparkles, RefreshCw, Zap, Gift } from "lucide-react";
+import { Coins, Check, History, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { CREDIT_COSTS, type CreditBalance, type CreditTransaction } from "@/types";
 import { estimateSearchesRemaining } from "@/lib/credit-calc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { getLocalBalance, getLocalTransactions, addLocalCredits } from "@/lib/local-store";
+import { getLocalBalance, getLocalTransactions } from "@/lib/local-store";
 
 interface CreditsViewProps {
   initialBalance: CreditBalance;
@@ -80,43 +80,6 @@ export function CreditsView({
     }
   }
 
-  async function handleDirectTopup(packageId: "starter" | "pro" | "agency" | "demo_50" | "demo_100" | "free_starter") {
-    setPurchasingId(packageId);
-    try {
-      const res = await fetch("/api/credits/topup", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ packageId }),
-      });
-
-      const data = await res.json();
-      if (res.ok && data.success) {
-        const added = data.added || 50;
-        addLocalCredits(added, `Top-up: ${packageId} (+${added} credits)`);
-        setBalance((prev) => ({
-          totalCredits: (prev.totalCredits ?? 20) + added,
-          usedCredits: prev.usedCredits ?? 0,
-          availableCredits: (prev.availableCredits ?? 0) + added,
-        }));
-        toast.success(`Successfully added +${added} credits to your account!`);
-      } else {
-        throw new Error(data.error || "Top-up failed");
-      }
-    } catch {
-      // Fallback directly to local store
-      const added = packageId === "pro" ? 600 : packageId === "agency" ? 2000 : packageId === "demo_100" ? 100 : packageId === "free_starter" ? 20 : 100;
-      addLocalCredits(added, `Top-up (${packageId})`);
-      setBalance((prev) => ({
-        totalCredits: (prev.totalCredits ?? 20) + added,
-        usedCredits: prev.usedCredits ?? 0,
-        availableCredits: (prev.availableCredits ?? 0) + added,
-      }));
-      toast.success(`Added +${added} credits to your balance!`);
-    } finally {
-      setPurchasingId(null);
-    }
-  }
-
   async function handlePurchase(packageId: "starter" | "pro" | "agency") {
     setPurchasingId(packageId);
     try {
@@ -132,10 +95,12 @@ export function CreditsView({
         return;
       }
 
-      // If Stripe is unconfigured, activate instant credit top-up seamlessly
-      await handleDirectTopup(packageId);
-    } catch {
-      await handleDirectTopup(packageId);
+      toast.error(
+        data.error || "Unable to initialize payment checkout. Please verify payment configuration."
+      );
+    } catch (err) {
+      console.log("Purchase error:", err);
+      toast.error("Checkout gateway error. Please try again or contact support.");
     } finally {
       setPurchasingId(null);
     }
@@ -259,62 +224,28 @@ export function CreditsView({
             </div>
           </div>
 
-          {/* Quick Refill & Test Recharge Bar */}
-          <div className="mt-5 p-3.5 bg-neutral-50/80 rounded-lg border border-neutral-200/70 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <Zap className="h-4 w-4 text-amber-500" />
-              <div>
-                <span className="text-xs font-semibold text-neutral-900">Instant Test Refill & Recharge</span>
-                <p className="text-[11px] text-neutral-500">Need credits immediately? Claim starter credits or instant test top-up.</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleDirectTopup("free_starter")}
-                disabled={Boolean(purchasingId)}
-                className="text-xs h-8 bg-white"
-              >
-                <Gift className="h-3 w-3 mr-1 text-emerald-600" />
-                +20 Starter Credits
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleDirectTopup("demo_50")}
-                disabled={Boolean(purchasingId)}
-                className="text-xs h-8 bg-white"
-              >
-                <Sparkles className="h-3 w-3 mr-1 text-primary" />
-                +50 Demo Credits
-              </Button>
-              <Button
-                size="sm"
-                onClick={() => handleDirectTopup("demo_100")}
-                disabled={Boolean(purchasingId)}
-                className="text-xs h-8"
-              >
-                +100 Refill
-              </Button>
-            </div>
-          </div>
-
-          {/* Progress Bar */}
-          <div className="mt-5 space-y-2">
-            <div className="flex justify-between text-xs text-neutral-500 font-medium">
+          {/* Progress Bar & Credit Utilization */}
+          <div className="mt-6 space-y-2">
+            <div className="flex justify-between text-xs text-neutral-600 font-medium">
               <span>Credit utilization</span>
-              <span>{usagePercentage}% used</span>
+              <span>
+                {used} of {total} credits used ({usagePercentage}%)
+              </span>
             </div>
             <div className="h-2.5 w-full bg-neutral-100 rounded-full overflow-hidden">
               <div
                 className="h-full bg-primary transition-all duration-500 rounded-full"
-                style={{ width: `${Math.max(4, Math.min(100, 100 - usagePercentage))}%` }}
+                style={{ width: `${Math.min(100, Math.max(used > 0 ? 3 : 0, usagePercentage))}%` }}
               />
             </div>
-            <p className="text-xs text-muted-foreground pt-1">
-              Every new search typically costs 7 credits for 10 businesses with full Maps enrichment, Instagram analysis, and outreach pitches.
-            </p>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 pt-1 text-xs text-muted-foreground">
+              <p>
+                Every search costs ~7 credits for 10 enriched businesses, Instagram analysis, and tailored pitches.
+              </p>
+              <span className="text-neutral-500 font-medium">
+                {available} credits remaining
+              </span>
+            </div>
           </div>
         </div>
       </Card>

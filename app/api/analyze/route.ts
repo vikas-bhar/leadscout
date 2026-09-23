@@ -120,22 +120,45 @@ export async function POST(request: NextRequest) {
       rank: 1,
       businessName: analysis.title || detected.displayName,
       businessCategory:
-        detected.type === "instagram"
+        (rawMetadata.category as string) ||
+        (detected.type === "instagram"
           ? "Instagram Profile"
           : detected.type === "website"
           ? "Web Presence"
           : detected.type === "maps"
           ? "Local Business"
-          : "Facebook Page",
-      location: "Direct URL Analysis",
+          : "Facebook Page"),
+      location:
+        (rawMetadata.address as string) ||
+        (detected.type === "maps" ? detected.displayName : null) ||
+        "Online Business Presence",
       googleRating: typeof rawMetadata.rating === "number" ? rawMetadata.rating : 4.5,
       reviewCount: typeof rawMetadata.reviewsCount === "number" ? rawMetadata.reviewsCount : 28,
-      hasWebsite: Boolean(detected.type === "website" || rawMetadata.hasWebsite || rawMetadata.linkInBioUrl),
-      websiteUrl: detected.type === "website" ? detected.cleanUrl : (rawMetadata.linkInBioUrl as string) || null,
-      phone: (rawMetadata.phone as string) || null,
+      hasWebsite: Boolean(
+        detected.type === "website" ||
+        rawMetadata.hasWebsite ||
+        rawMetadata.website ||
+        rawMetadata.linkInBioUrl
+      ),
+      websiteUrl:
+        detected.type === "website"
+          ? detected.cleanUrl
+          : (rawMetadata.website as string) || (rawMetadata.linkInBioUrl as string) || null,
+      phone:
+        (rawMetadata.contactPhone as string) ||
+        (rawMetadata.phone as string) ||
+        null,
       photoCount: (rawMetadata.photosCount as number) || 12,
-      mapsUrl: detected.type === "maps" ? detected.cleanUrl : null,
-      instagramHandle: detected.type === "instagram" ? (detected.handle ? `@${detected.handle}` : null) : null,
+      mapsUrl:
+        detected.type === "maps"
+          ? detected.cleanUrl
+          : rawMetadata.address
+          ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${analysis.title || detected.displayName}, ${rawMetadata.address}`)}`
+          : null,
+      instagramHandle:
+        detected.type === "instagram"
+          ? (detected.handle ? `@${detected.handle}` : null)
+          : (rawMetadata.instagramHandle as string) || null,
       instagramFollowers: typeof rawMetadata.followers === "number" ? rawMetadata.followers : null,
       instagramFollowing: typeof rawMetadata.following === "number" ? rawMetadata.following : null,
       instagramPosts: typeof rawMetadata.totalPosts === "number" ? rawMetadata.totalPosts : null,

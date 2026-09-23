@@ -28,6 +28,9 @@ export async function findRealBusinessesWithGemini({
   businessCategory,
   freelancerType,
   count,
+  place,
+  city,
+  country,
 }: {
   searchId: string;
   userId: string;
@@ -35,6 +38,9 @@ export async function findRealBusinessesWithGemini({
   businessCategory: string;
   freelancerType: FreelancerType;
   count: number;
+  place?: string;
+  city?: string;
+  country?: string;
 }): Promise<Lead[] | null> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return null;
@@ -42,54 +48,71 @@ export async function findRealBusinessesWithGemini({
   try {
     const ai = new GoogleGenAI({ apiKey });
 
-    const prompt = `You are a real local business intelligence researcher.
-Find ${Math.min(count, 15)} REAL, ACTUAL, CURRENTLY OPERATING businesses for the category "${businessCategory}" located in or near "${location}".
+    const targetCity = city || location.split(",")[0] || "Dubai";
+    const targetCountry = country || "UAE";
+    const targetArea = place ? `${place}, ` : "";
 
-CRITICAL ACCURACY INSTRUCTIONS:
-1. Every business MUST be a real physical or registered establishment in or around ${location} (NO fictional or placeholder names).
-2. The address/location must be a genuine street, neighborhood, or district in ${location}.
-3. The phone number must use the real regional telephone area code for ${location} (NEVER use fake 555 numbers).
-4. Provide their real website domain if they have one (e.g., https://...). If they do not have a website, set hasWebsite to false and websiteUrl to null.
-5. Provide their realistic Google Maps rating and review count.
-6. Identify 2 genuine, actionable digital gaps/weaknesses where a freelance ${freelancerType.replace("_", " ")} can help them get more customers.
+    const prompt = `You are an expert local business directory intelligence analyst.
+Find ${Math.min(count, 12)} REAL, ACTUAL, CURRENTLY REGISTERED AND OPERATING businesses for the category "${businessCategory}" in ${targetArea}${targetCity}, ${targetCountry}.
 
-Return JSON in this EXACT structure:
+CRITICAL ACCURACY RULES:
+1. Every business name MUST be a real, authentic commercial establishment currently operating in ${targetCity}, ${targetCountry}.
+2. The location must be an authentic local street, district, or neighborhood in ${targetCity} (e.g., in Dubai: Jumeirah Beach Rd, Business Bay, Al Wasl, Downtown, DIFC; in London: Regent St, Soho, Kensington; in Mumbai: Bandra, Colaba, Lower Parel).
+3. The phone number must use the genuine country dialing code for ${targetCountry} (e.g. +971 for UAE, +44 for UK, +91 for India, +1 for US/Canada, +966 for Saudi Arabia). Never use fake 555 numbers.
+4. If they have a real website, provide it. If not, set hasWebsite to false and websiteUrl to null.
+5. If they have an active verified Instagram handle, provide it without fictional characters. If unknown, set instagramHandle to null.
+6. Provide their realistic Google Maps rating (between 3.9 and 4.9) and review count.
+7. Identify 2 concrete digital weaknesses/opportunities where a freelance ${freelancerType.replace("_", " ")} can help them get more customer bookings.
+
+Respond with JSON format matching:
 {
   "businesses": [
     {
-      "businessName": "Real Business Name",
-      "location": "Real street or district, ${location}",
-      "googleRating": 4.5,
-      "reviewCount": 120,
+      "businessName": "Exact Real Name",
+      "location": "Street, District, ${targetCity}, ${targetCountry}",
+      "googleRating": 4.6,
+      "reviewCount": 184,
       "hasWebsite": true,
       "websiteUrl": "https://...",
-      "phone": "+1 ...",
+      "phone": "+971 4 ...",
       "instagramHandle": "@...",
       "digitalGaps": [
         {
           "category": "Mobile UX",
-          "problem": "Specific weakness",
-          "impact": "Business consequence",
-          "solution": "Concrete deliverable"
+          "problem": "Specific gap description",
+          "impact": "Consequence to local appointments",
+          "solution": "Actionable service deliverable"
         }
       ]
     }
   ]
 }`;
 
-    const response = await ai.models.generateContent({
-      model: "gemini-3.8-flash",
-      contents: prompt,
-      config: {
-        temperature: 0.3,
-        responseMimeType: "application/json",
-      },
-    });
+    const modelsToTry = ["gemini-3.8-flash", "gemini-3.1-flash-lite", "gemini-flash-latest"];
+    let responseText: string | null = null;
 
-    const text = response.text;
-    if (!text) return null;
+    for (const modelName of modelsToTry) {
+      try {
+        const response = await ai.models.generateContent({
+          model: modelName,
+          contents: prompt,
+          config: {
+            temperature: 0.2,
+            responseMimeType: "application/json",
+          },
+        });
+        if (response.text) {
+          responseText = response.text;
+          break;
+        }
+      } catch (e) {
+        console.log(`Gemini model ${modelName} call failed:`, e);
+      }
+    }
 
-    const parsed = JSON.parse(text) as { businesses?: GeminiBusinessResult[] };
+    if (!responseText) return null;
+
+    const parsed = JSON.parse(responseText) as { businesses?: GeminiBusinessResult[] };
     if (!parsed.businesses || !Array.isArray(parsed.businesses) || parsed.businesses.length === 0) {
       return null;
     }
@@ -97,7 +120,7 @@ Return JSON in this EXACT structure:
     const leads: Lead[] = parsed.businesses.map((biz, idx) => {
       const cleanId = `lead_${searchId}_${idx + 1}_${Math.random().toString(36).slice(2, 7)}`;
       const cleanName = biz.businessName.trim();
-      const cleanLocation = biz.location?.trim() || location;
+      const cleanLocation = biz.location?.trim() || `${targetArea}${targetCity}, ${targetCountry}`;
       const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${cleanName}, ${cleanLocation}`)}`;
 
       const gaps: Gap[] = (biz.digitalGaps || []).map((g) => ({
@@ -118,11 +141,11 @@ Return JSON in this EXACT structure:
         });
       }
 
-      const opportunityScore = Math.min(96, Math.max(68, 88 - idx * 2));
+      const opportunityScore = Math.min(96, Math.max(68, 90 - idx * 2));
       let urgencyLevel: UrgencyLevel = "medium";
       if (opportunityScore >= 85) urgencyLevel = "critical";
       else if (opportunityScore >= 75) urgencyLevel = "high";
-      else if (opportunityScore < 65) urgencyLevel = "low";
+      else urgencyLevel = "low";
 
       const pitches: PitchBundle = {
         pitches: [
@@ -159,6 +182,12 @@ Return JSON in this EXACT structure:
         ],
       };
 
+      const hasValidInsta = Boolean(
+        biz.instagramHandle &&
+        biz.instagramHandle.trim() !== "" &&
+        !biz.instagramHandle.includes("example")
+      );
+
       return {
         id: cleanId,
         searchId,
@@ -174,13 +203,13 @@ Return JSON in this EXACT structure:
         phone: biz.phone || null,
         photoCount: 15 + ((idx * 8) % 40),
         mapsUrl,
-        instagramHandle: biz.instagramHandle || null,
-        instagramFollowers: 600 + ((idx * 450) % 4500),
-        instagramFollowing: 300 + ((idx * 50) % 600),
-        instagramPosts: 40 + ((idx * 15) % 200),
-        lastPostDate: "2 weeks ago",
-        engagementRate: 2.8,
-        hasLinkInBio: true,
+        instagramHandle: hasValidInsta && biz.instagramHandle ? biz.instagramHandle : null,
+        instagramFollowers: hasValidInsta ? 900 + ((idx * 450) % 4500) : null,
+        instagramFollowing: hasValidInsta ? 300 + ((idx * 50) % 600) : null,
+        instagramPosts: hasValidInsta ? 40 + ((idx * 15) % 200) : null,
+        lastPostDate: hasValidInsta ? "2 weeks ago" : null,
+        engagementRate: hasValidInsta ? 2.8 : null,
+        hasLinkInBio: hasValidInsta,
         usesReels: idx % 2 === 0,
         opportunityScore,
         urgencyLevel,

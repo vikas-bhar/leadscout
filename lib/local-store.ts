@@ -157,30 +157,6 @@ export function addLocalCredits(
   return { success: true, newBalance: newAvailable };
 }
 
-export function resetLocalStarterCredits(): { success: boolean; newBalance: number } {
-  const store = getStore();
-  store.balance = {
-    totalCredits: Math.max(20, store.balance.totalCredits ?? 20),
-    usedCredits: store.balance.usedCredits ?? 0,
-    availableCredits: (store.balance.availableCredits ?? 0) + 20,
-  };
-
-  store.transactions.unshift({
-    id: `tx_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-    userId: "demo-user-id",
-    type: "bonus",
-    creditsAmount: 20,
-    action: "claim_free",
-    description: "Free starter recharge (20 credits)",
-    searchId: null,
-    stripeSession: null,
-    createdAt: new Date().toISOString(),
-  });
-
-  saveStore(store);
-  return { success: true, newBalance: store.balance.availableCredits };
-}
-
 export function getLocalTransactions(): CreditTransaction[] {
   return getStore().transactions;
 }

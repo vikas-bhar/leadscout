@@ -16,7 +16,7 @@ export default async function SearchPage() {
     supabase.from("users").select("freelancer_type").eq("id", user.id).maybeSingle(),
   ]);
 
-  const available = balance?.availableCredits ?? 20;
+  const available = balance?.availableCredits ?? 100;
   const freelancerType = (profile?.freelancer_type as FreelancerType) || "web_designer";
 
   return (

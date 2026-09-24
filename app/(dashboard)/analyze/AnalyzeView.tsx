@@ -37,14 +37,37 @@ export function AnalyzeView({ initialAvailableCredits }: AnalyzeViewProps) {
   const [url, setUrl] = useState("");
   const [availableCredits, setAvailableCredits] = useState(initialAvailableCredits);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isRefreshingLive, setIsRefreshingLive] = useState(false);
+  const [isRefilling, setIsRefilling] = useState(false);
+  const [isCachedResult, setIsCachedResult] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [analysisData, setAnalysisData] = useState<AnalyzerResultData | null>(null);
   const [leadData, setLeadData] = useState<Lead | undefined>(undefined);
 
   useEffect(() => {
+    let cancelled = false;
+
+    async function fetchServerCredits() {
+      try {
+        const res = await fetch("/api/credits/balance");
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled && typeof data.availableCredits === "number") {
+          setAvailableCredits(data.availableCredits);
+        }
+      } catch {
+        const local = getLocalBalance();
+        if (local && typeof local.availableCredits === "number" && !cancelled) {
+          setAvailableCredits(local.availableCredits);
+        }
+      }
+    }
+
+    void fetchServerCredits();
+
     function sync() {
       const bal = getLocalBalance();
-      if (bal && typeof bal.availableCredits === "number") {
+      if (bal && typeof bal.availableCredits === "number" && !cancelled) {
         setAvailableCredits(bal.availableCredits);
       }
     }
@@ -52,6 +75,7 @@ export function AnalyzeView({ initialAvailableCredits }: AnalyzeViewProps) {
     window.addEventListener("freelancefind_store_updated", sync);
     window.addEventListener("storage", sync);
     return () => {
+      cancelled = true;
       window.removeEventListener("freelancefind_store_updated", sync);
       window.removeEventListener("storage", sync);
     };
@@ -59,6 +83,30 @@ export function AnalyzeView({ initialAvailableCredits }: AnalyzeViewProps) {
 
   const cost = CREDIT_COSTS.analyze_link || 5;
   const hasEnoughCredits = availableCredits >= cost;
+
+  async function handleClaimRefill() {
+    setIsRefilling(true);
+    try {
+      const res = await fetch("/api/credits/topup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amount: 50 }),
+      });
+      const data = await res.json();
+      if (res.ok && typeof data.newBalance === "number") {
+        setAvailableCredits(data.newBalance);
+        setError(null);
+        toast.success(`Claimed 50 test credits! New balance: ${data.newBalance} credits.`);
+        window.dispatchEvent(new Event("freelancefind_store_updated"));
+      } else {
+        toast.error(data.error || "Could not refill test credits");
+      }
+    } catch {
+      toast.error("Network error while claiming test credits");
+    } finally {
+      setIsRefilling(false);
+    }
+  }
 
   // Real-time link type detection
   const detected = useMemo(() => {
@@ -78,30 +126,31 @@ export function AnalyzeView({ initialAvailableCredits }: AnalyzeViewProps) {
     }
   }
 
-  async function handleAnalyze(e: React.FormEvent) {
-    e.preventDefault();
-    const targetUrl = url.trim();
-
+  async function executeAnalysis(targetUrl: string, bypassCache = false) {
     if (!targetUrl) {
       toast.error("Please paste or type a valid business URL");
       return;
     }
 
-    if (!hasEnoughCredits) {
+    if (!hasEnoughCredits && !bypassCache) {
       toast.error(`Insufficient credits. You need ${cost} credits, but have ${availableCredits}.`);
       return;
     }
 
     setError(null);
-    setIsAnalyzing(true);
-    setAnalysisData(null);
-    setLeadData(undefined);
+    if (bypassCache) {
+      setIsRefreshingLive(true);
+    } else {
+      setIsAnalyzing(true);
+      setAnalysisData(null);
+      setLeadData(undefined);
+    }
 
     try {
       const response = await fetch("/api/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: targetUrl }),
+        body: JSON.stringify({ url: targetUrl, bypassCache }),
       });
 
       const data = await response.json();
@@ -112,6 +161,7 @@ export function AnalyzeView({ initialAvailableCredits }: AnalyzeViewProps) {
 
       setAnalysisData(data.analysis);
       setLeadData(data.lead);
+      setIsCachedResult(Boolean(data.cached));
 
       if (data.lead) {
         saveLocalLeads([data.lead]);
@@ -119,8 +169,10 @@ export function AnalyzeView({ initialAvailableCredits }: AnalyzeViewProps) {
 
       if (typeof data.newBalance === "number") {
         setAvailableCredits(data.newBalance);
+        window.dispatchEvent(new Event("freelancefind_store_updated"));
       } else if (!data.cached) {
         setAvailableCredits((prev) => Math.max(0, prev - cost));
+        window.dispatchEvent(new Event("freelancefind_store_updated"));
       }
 
       if (!data.cached && data.creditsUsed !== 0) {
@@ -130,7 +182,7 @@ export function AnalyzeView({ initialAvailableCredits }: AnalyzeViewProps) {
       if (data.cached) {
         toast.success("Loaded from 24h Business Cache (0 credits consumed)!");
       } else {
-        toast.success("Gap Analysis completed successfully!");
+        toast.success("Live Gap Analysis completed successfully!");
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to analyze link";
@@ -138,13 +190,20 @@ export function AnalyzeView({ initialAvailableCredits }: AnalyzeViewProps) {
       toast.error(msg);
     } finally {
       setIsAnalyzing(false);
+      setIsRefreshingLive(false);
     }
+  }
+
+  async function handleAnalyze(e: React.FormEvent) {
+    e.preventDefault();
+    await executeAnalysis(url.trim(), false);
   }
 
   function handleReset() {
     setUrl("");
     setAnalysisData(null);
     setLeadData(undefined);
+    setIsCachedResult(false);
     setError(null);
   }
 
@@ -307,23 +366,39 @@ export function AnalyzeView({ initialAvailableCredits }: AnalyzeViewProps) {
               </span>
             </div>
 
-            <Button
-              type="submit"
-              disabled={isAnalyzing || !url.trim() || !hasEnoughCredits}
-              className="h-11 px-6 text-sm font-semibold shadow-sm flex items-center justify-center gap-2 w-full sm:w-auto"
-            >
-              {isAnalyzing ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Auditing &amp; Analyzing Gaps...
-                </>
-              ) : (
-                <>
-                  <Sparkles className="h-4 w-4" />
-                  Analyze Link — {cost} Credits
-                </>
+            <div className="flex items-center gap-2">
+              {!hasEnoughCredits && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleClaimRefill}
+                  disabled={isRefilling}
+                  className="h-10 text-xs text-amber-700 bg-amber-50 hover:bg-amber-100 border-amber-300 font-medium"
+                >
+                  {isRefilling ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                  Claim 50 Free Test Credits
+                </Button>
               )}
-            </Button>
+
+              <Button
+                type="submit"
+                disabled={isAnalyzing || !url.trim() || !hasEnoughCredits}
+                className="h-11 px-6 text-sm font-semibold shadow-sm flex items-center justify-center gap-2 w-full sm:w-auto"
+              >
+                {isAnalyzing ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Auditing &amp; Analyzing Gaps...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="h-4 w-4" />
+                    Analyze Link — {cost} Credits
+                  </>
+                )}
+              </Button>
+            </div>
           </div>
         </form>
       </Card>
@@ -350,6 +425,9 @@ export function AnalyzeView({ initialAvailableCredits }: AnalyzeViewProps) {
             analysis={analysisData}
             lead={leadData}
             onReset={handleReset}
+            isCached={isCachedResult}
+            onRefreshLive={() => executeAnalysis(url.trim(), true)}
+            isRefreshingLive={isRefreshingLive}
           />
         </div>
       )}

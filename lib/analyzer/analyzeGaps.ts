@@ -61,6 +61,13 @@ Good engagement rate: 2-3%
 Ideal post frequency: 4-5x per week
 Reels reach: 3x more than photos
 
+CRITICAL ACCURACY & GROUNDING RULES:
+- Strictly ground your evaluation in the real numbers above.
+- If totalPosts <= 3 or followers < 150: Explicitly classify this profile as an inactive, dormant, personal, or unlaunched account. NEVER claim "maintaining an active profile presence" or "clear brand aesthetics" if there is only 1-2 posts or a personal photo.
+- In "whatTheyDoWell": Only state verifiable truths (e.g., "Clean handle claimed", "Small personal follower base", or "Account active since registration").
+- If bio is minimal/non-business (e.g., "Nothing!!"), explicitly identify the lack of any business description or call to action.
+- In pitches: Do NOT write generic flattery like "Loved seeing your recent posts" if totalPosts <= 2. Instead, pitch from the angle of turning a dormant or fresh profile into an active brand from scratch.
+
 Return pure JSON only (no markdown, no backticks, no code fence):
 {
   "accountScore": number 0-100,
@@ -125,7 +132,70 @@ Return pure JSON only (no markdown, no backticks, no code fence):
   }
 
   // Analytical Fallback when Gemini API key is missing or errored
+  const isPersonalOrDormant = data.totalPosts <= 3 || data.followers < 150;
   const gaps = getInstagramFallbackGaps(data);
+
+  if (isPersonalOrDormant) {
+    return {
+      linkType: "instagram",
+      targetUrl: detected.cleanUrl,
+      title: `@${data.username}`,
+      handle: data.username,
+      overallScore: 32,
+      contentScore: 24,
+      engagementScore: 38,
+      growthScore: 28,
+      followerHealthScore: 40,
+      gaps: [
+        {
+          area: "Account Maturity & Business Setup",
+          problem: `Account is currently inactive or personal (${data.totalPosts} post${data.totalPosts === 1 ? "" : "s"}, ${data.followers} followers)`,
+          impact: "Zero business footprint, search discoverability, or brand authority",
+          severity: "critical",
+          fix: "Launch a 9-post grid foundation establishing clear niche value, services, and bio positioning",
+          estimatedImpact: "Establish a baseline trustworthy commercial presence",
+        },
+        {
+          area: "Bio & Offer Positioning",
+          problem: `Bio contains no business offer, services, or call to action (currently "${data.bio}")`,
+          impact: "Visitors immediately bounce without knowing what value or service is provided",
+          severity: "critical",
+          fix: "Rewrite bio with: Who you help + How you help them + Clear link to book or DM",
+          estimatedImpact: "Capture incoming profile visitors",
+        },
+        {
+          area: "Short-Form Video & Discovery",
+          problem: "Zero Reels or regular content engine in place",
+          impact: "No algorithmic reach or local discovery",
+          severity: "high",
+          fix: "Publish 2 short-form video introductions or niche tips per week",
+          estimatedImpact: "Generate initial organic reach",
+        },
+      ],
+      whatTheyDoWell: [
+        `Handle @${data.username} successfully secured`,
+        `Baseline follower audience (${data.followers} followers, ${data.following} following)`,
+        `Clean slate ready for brand building or launch`,
+      ],
+      missedOpportunities: [
+        `Dormant profile with only ${data.totalPosts} post${data.totalPosts === 1 ? "" : "s"} published`,
+        `Bio lacks commercial positioning or clear service offering (currently "${data.bio}")`,
+        "Zero conversion funnel, highlights, or links to monetize profile traffic",
+      ],
+      estimatedLoss: "Unmonetized profile — missing 100% of potential digital business reach",
+      recommendedServices: [
+        "Brand Identity & Profile Setup",
+        "9-Post Launch Content Grid",
+        "High-Converting Bio & Link Funnel",
+      ],
+      pitchAngle: "Pitch complete zero-to-one launch package to turn a blank personal profile into a professional brand.",
+      instagramDMPitch: `Hey @${data.username}! Noticed your profile has a great handle and clean slate (${data.followers} followers, ${data.totalPosts} post), but no active brand setup yet. If you're looking to turn this account into a brand, freelance business, or personal portfolio, I specialize in building out 9-post launch grids and high-converting bios. Mind if I share 2 quick ideas for your profile?`,
+      emailPitch: `Hi @${data.username},\n\nI came across your Instagram profile (@${data.username}) and saw you've got the account reserved, but haven't actively launched a brand presence yet.\n\nI build turnkey launch packages for entrepreneurs and creators (including bio setup, 9-post visual grid, and initial Reel templates).\n\nWould you be open to seeing a quick concept mockup for how this profile could look fully launched?\n\nBest,\nYour Freelance Growth Partner`,
+      urgencyLevel: "critical",
+      metadata: data as unknown as Record<string, unknown>,
+    };
+  }
+
   return {
     linkType: "instagram",
     targetUrl: detected.cleanUrl,
@@ -138,8 +208,8 @@ Return pure JSON only (no markdown, no backticks, no code fence):
     followerHealthScore: 65,
     gaps,
     whatTheyDoWell: [
-      `Maintains active profile presence with ${data.followers.toLocaleString()} followers`,
-      `Clear brand aesthetics and visual identity`,
+      `Established profile presence with ${data.followers.toLocaleString()} followers`,
+      data.postsPerWeek >= 2 ? "Consistent posting cadence maintained" : "Established community follower base",
       data.hasLinkInBio ? "Active website link present in bio" : "Organic engagement from core customers",
     ],
     missedOpportunities: [

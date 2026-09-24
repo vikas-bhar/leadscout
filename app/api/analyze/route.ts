@@ -14,6 +14,7 @@ export const dynamic = "force-dynamic";
 const analyzeSchema = z.object({
   url: z.string().min(3, "URL is required"),
   freelancerType: z.string().optional(),
+  bypassCache: z.boolean().optional(),
 });
 
 const ANALYZE_COST = CREDIT_COSTS.analyze_link || 5;
@@ -41,7 +42,11 @@ export async function POST(request: NextRequest) {
     // -------------------------------------------------------------
     // 1. 24-Hour Business Data Caching Layer
     // -------------------------------------------------------------
-    const cached = getCachedAnalysis(parsed.url) || getCachedAnalysis(detected.cleanUrl);
+    const shouldBypassCache = Boolean(parsed.bypassCache);
+    const cached = shouldBypassCache
+      ? null
+      : (getCachedAnalysis(parsed.url) || getCachedAnalysis(detected.cleanUrl));
+
     if (cached) {
       const balance = await getCreditBalance(auth.user.id, auth.supabase);
       

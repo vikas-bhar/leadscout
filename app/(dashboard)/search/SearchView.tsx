@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -13,6 +13,7 @@ import {
   Sparkles,
   AlertCircle,
   Sliders,
+  PlusCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -21,7 +22,7 @@ import {
   type FreelancerType,
 } from "@/types";
 import { calculateSearchCost } from "@/lib/credit-calc";
-import { saveLocalLeads, saveLocalSearch, deductLocalCredits } from "@/lib/local-store";
+import { saveLocalLeads, saveLocalSearch, deductLocalCredits, getLocalBalance } from "@/lib/local-store";
 import {
   LocationFilter,
   buildSearchLocationString,
@@ -64,6 +65,7 @@ export function SearchView({
 
   const [resultCount, setResultCount] = useState<number>(10);
   const [availableCredits, setAvailableCredits] = useState<number>(initialAvailableCredits);
+  const [isRefilling, setIsRefilling] = useState(false);
 
   // Search state
   const [isSearching, setIsSearching] = useState(false);
@@ -71,8 +73,71 @@ export function SearchView({
   const [progressPercent, setProgressPercent] = useState(10);
   const [error, setError] = useState<string | null>(null);
 
+  // Sync live credits from server and local storage
+  useEffect(() => {
+    let cancelled = false;
+
+    async function fetchServerCredits() {
+      try {
+        const res = await fetch("/api/credits/balance");
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled && typeof data.availableCredits === "number") {
+          setAvailableCredits(data.availableCredits);
+        }
+      } catch {
+        const local = getLocalBalance();
+        if (local && typeof local.availableCredits === "number" && !cancelled) {
+          setAvailableCredits(local.availableCredits);
+        }
+      }
+    }
+
+    void fetchServerCredits();
+
+    function sync() {
+      const local = getLocalBalance();
+      if (local && typeof local.availableCredits === "number" && !cancelled) {
+        setAvailableCredits(local.availableCredits);
+      }
+    }
+
+    window.addEventListener("freelancefind_store_updated", sync);
+    window.addEventListener("storage", sync);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener("freelancefind_store_updated", sync);
+      window.removeEventListener("storage", sync);
+    };
+  }, []);
+
   const cost = calculateSearchCost(resultCount);
   const hasEnough = availableCredits >= cost.totalCredits;
+
+  async function handleClaimRefill() {
+    setIsRefilling(true);
+    try {
+      const res = await fetch("/api/credits/topup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amount: 50 }),
+      });
+      const data = await res.json();
+      if (res.ok && typeof data.newBalance === "number") {
+        setAvailableCredits(data.newBalance);
+        setError(null);
+        toast.success(`Claimed 50 test credits! New balance: ${data.newBalance} credits.`);
+        window.dispatchEvent(new Event("freelancefind_store_updated"));
+      } else {
+        toast.error(data.error || "Could not refill test credits");
+      }
+    } catch {
+      toast.error("Network error while claiming test credits");
+    } finally {
+      setIsRefilling(false);
+    }
+  }
 
   async function handleStartSearch(e: React.FormEvent) {
     e.preventDefault();
@@ -86,6 +151,7 @@ export function SearchView({
       toast.error(
         `Insufficient credits. You need ${cost.totalCredits} credits, but have ${availableCredits}.`
       );
+      setError(`Insufficient credits. This search requires ${cost.totalCredits} credits, but you have ${availableCredits} available.`);
       return;
     }
 
@@ -149,6 +215,7 @@ export function SearchView({
 
       if (typeof data.newBalance === "number") {
         setAvailableCredits(data.newBalance);
+        window.dispatchEvent(new Event("freelancefind_store_updated"));
       }
 
       // Route to Leads page
@@ -300,12 +367,18 @@ export function SearchView({
                   onCountryChange={(newCountry, newCode) => {
                     setCountry(newCountry);
                     setCountryCode(newCode);
+                    setPlace(""); // Automatically clear specific place when changing country
                     const found = ALL_COUNTRIES.find((c) => c.code.toLowerCase() === newCode.toLowerCase());
                     if (found && found.cities.length > 0) {
                       setCity(found.cities[0]);
+                    } else {
+                      setCity("");
                     }
                   }}
-                  onCityChange={setCity}
+                  onCityChange={(newCity) => {
+                    setCity(newCity);
+                    setPlace(""); // Automatically clear specific place when changing city
+                  }}
                   onPlaceChange={setPlace}
                 />
               </div>
@@ -343,14 +416,34 @@ export function SearchView({
               </div>
 
               {error && (
-                <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-xs text-red-700 flex items-start gap-2">
-                  <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
-                  <span>{error}</span>
+                <div className="p-3.5 rounded-lg bg-red-50 border border-red-200 text-xs text-red-700 space-y-2">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                    <span>{error}</span>
+                  </div>
+                  {availableCredits < cost.totalCredits && (
+                    <div className="pt-1 flex items-center gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={handleClaimRefill}
+                        disabled={isRefilling}
+                        className="h-8 text-xs bg-white border-red-300 text-red-700 hover:bg-red-50 font-medium gap-1.5"
+                      >
+                        {isRefilling ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <PlusCircle className="h-3.5 w-3.5" />}
+                        Claim 50 Free Test Credits
+                      </Button>
+                      <Link href="/credits" className="text-xs text-primary font-medium underline">
+                        View Packages
+                      </Link>
+                    </div>
+                  )}
                 </div>
               )}
 
               {/* Submit Button */}
-              <div className="pt-2">
+              <div className="pt-2 space-y-3">
                 <Button
                   type="submit"
                   disabled={!hasEnough || !location.trim()}
@@ -361,13 +454,24 @@ export function SearchView({
                 </Button>
 
                 {!hasEnough && (
-                  <p className="mt-2 text-xs text-center text-red-600">
-                    You have {availableCredits} credits.{" "}
-                    <Link href="/credits" className="font-semibold underline">
-                      Buy more credits
-                    </Link>{" "}
-                    to run this search.
-                  </p>
+                  <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                    <div>
+                      <p className="font-semibold">Insufficient credits for this search</p>
+                      <p className="text-[11px] text-amber-700 mt-0.5">
+                        Current balance: <strong>{availableCredits} credits</strong> (Search requires <strong>{cost.totalCredits} credits</strong>).
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={handleClaimRefill}
+                      disabled={isRefilling}
+                      className="h-8 text-xs bg-amber-600 hover:bg-amber-700 text-white font-medium shrink-0 gap-1.5"
+                    >
+                      {isRefilling ? <Loader2 className="h-3 w-3 animate-spin" /> : <PlusCircle className="h-3 w-3" />}
+                      Claim +50 Free Credits
+                    </Button>
+                  </div>
                 )}
               </div>
             </form>
@@ -412,7 +516,7 @@ export function SearchView({
                 <span className="text-primary text-base shrink-0 whitespace-nowrap">{cost.totalCredits} credits</span>
               </div>
 
-              <div className="rounded-lg bg-neutral-50 border border-neutral-100 p-3 mt-4 space-y-1.5">
+              <div className="rounded-lg bg-neutral-50 border border-neutral-100 p-3 mt-4 space-y-2">
                 <div className="flex justify-between text-xs text-neutral-600 gap-3">
                   <span>Your current balance:</span>
                   <span className="font-semibold text-neutral-900 shrink-0 whitespace-nowrap">{availableCredits} credits</span>
@@ -428,6 +532,22 @@ export function SearchView({
                     {hasEnough ? `${availableCredits - cost.totalCredits} credits` : "Insufficient"}
                   </span>
                 </div>
+
+                {!hasEnough && (
+                  <div className="pt-2 border-t border-neutral-200/60 flex items-center justify-between">
+                    <span className="text-[11px] text-neutral-500">Need more testing credits?</span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleClaimRefill}
+                      disabled={isRefilling}
+                      className="h-6 text-[11px] text-primary hover:text-primary hover:bg-primary/10 px-2 font-semibold"
+                    >
+                      {isRefilling ? "Adding..." : "+50 Test Credits"}
+                    </Button>
+                  </div>
+                )}
               </div>
             </div>
 

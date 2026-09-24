@@ -25,6 +25,7 @@ import {
   ChevronUp,
   RotateCcw,
   Filter,
+  Mail,
 } from "lucide-react";
 import {
   type Gap,
@@ -40,6 +41,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { getLocalLeads, updateLocalLead } from "@/lib/local-store";
 import { toast } from "sonner";
+import { OutreachTemplateModal } from "@/components/leads/OutreachTemplateModal";
 
 interface LeadsViewProps {
   initialLeads: Lead[];
@@ -54,6 +56,7 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTagPickerId, setActiveTagPickerId] = useState<string | null>(null);
   const [customTagInput, setCustomTagInput] = useState("");
+  const [selectedLeadForTemplate, setSelectedLeadForTemplate] = useState<Lead | null>(null);
   const tagPickerRef = useRef<HTMLDivElement>(null);
 
   // Advanced Filters State: Opportunity Score, Location, and Industry Type
@@ -1609,18 +1612,41 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
                     </span>
                   </div>
 
-                  <Link href={`/leads/${lead.id}`}>
-                    <Button size="sm" variant="default" className="gap-1.5 text-xs font-semibold">
-                      <span>View Lead</span>
-                      <ArrowRight className="h-3.5 w-3.5" />
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setSelectedLeadForTemplate(lead)}
+                      className="gap-1.5 text-xs font-semibold text-neutral-700 hover:text-primary hover:border-primary/40"
+                      title="Apply custom outreach template with auto-inserted AI pitch"
+                    >
+                      <Mail className="h-3.5 w-3.5 text-primary" />
+                      <span>Template</span>
                     </Button>
-                  </Link>
+
+                    <Link href={`/leads/${lead.id}`}>
+                      <Button size="sm" variant="default" className="gap-1.5 text-xs font-semibold">
+                        <span>View Lead</span>
+                        <ArrowRight className="h-3.5 w-3.5" />
+                      </Button>
+                    </Link>
+                  </div>
                 </div>
               </div>
             </div>
           );
         })}
       </div>
+    )}
+
+    {/* Outreach Template Modal */}
+    {selectedLeadForTemplate && (
+      <OutreachTemplateModal
+        isOpen={Boolean(selectedLeadForTemplate)}
+        onClose={() => setSelectedLeadForTemplate(null)}
+        lead={selectedLeadForTemplate}
+        defaultChannel="email"
+      />
     )}
   </div>
   );

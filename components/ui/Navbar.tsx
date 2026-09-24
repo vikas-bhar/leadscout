@@ -16,6 +16,7 @@ const NAV_LINKS = [
   { href: "/leads", label: "Leads" },
   { href: "/history", label: "History" },
   { href: "/credits", label: "Credits" },
+  { href: "/settings", label: "Settings" },
 ];
 
 export function Navbar() {

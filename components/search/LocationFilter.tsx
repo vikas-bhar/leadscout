@@ -190,7 +190,8 @@ export function LocationFilter({
   function handleSelectCountry(item: CountryItem) {
     onCountryChange(item.name, item.code);
     setIsDropdownOpen(false);
-    // If current city is not in the new country's city list and was preselected, keep or let user edit
+    // Clear specific neighborhood from previous country to avoid invalid search queries
+    onPlaceChange("");
   }
 
   function handleCityPillClick(cityName: string) {
@@ -199,6 +200,8 @@ export function LocationFilter({
     } else {
       onCityChange(cityName);
     }
+    // Clear specific neighborhood from previous city
+    onPlaceChange("");
   }
 
   const liveSearchPreview = buildFullSearchQuery(businessCategory, place, city, country);

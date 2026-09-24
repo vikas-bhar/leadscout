@@ -45,6 +45,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { getLocalLeadById, updateLocalLead } from "@/lib/local-store";
+import { OutreachTemplateModal } from "@/components/leads/OutreachTemplateModal";
 
 interface LeadDetailViewProps {
   initialLead: Record<string, unknown>;
@@ -81,6 +82,7 @@ export function LeadDetailView({ initialLead }: LeadDetailViewProps) {
 
   const [tags, setTags] = useState<string[]>(parsedInitialTags);
   const [customTagInput, setCustomTagInput] = useState("");
+  const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
 
   // Extract business details with intelligent fallbacks
   const businessName = (leadData.businessName ?? leadData.business_name ?? "Discovered Lead") as string;
@@ -771,12 +773,22 @@ export function LeadDetailView({ initialLead }: LeadDetailViewProps) {
         {/* Left Column: Personalized Outreach Pitches */}
         <div className="lg:col-span-7 space-y-6">
           <Card className="border border-neutral-200/80 shadow-sm overflow-hidden bg-white">
-            <div className="p-5 border-b border-neutral-100 flex items-center justify-between">
+            <div className="p-5 border-b border-neutral-100 flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <Sparkles className="h-4 w-4 text-primary" />
                 <h2 className="text-sm font-semibold text-neutral-900">Personalized Outreach Pitches</h2>
               </div>
-              <span className="text-[11px] font-medium text-neutral-500">AI Tailored for this business</span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsTemplateModalOpen(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-primary/30 bg-primary/5 text-primary hover:bg-primary/10 text-xs font-semibold transition-colors shadow-2xs"
+                  title="Apply custom templates from library"
+                >
+                  <Mail className="h-3.5 w-3.5" />
+                  <span>Outreach Templates Library</span>
+                </button>
+              </div>
             </div>
 
             {/* Pitch Style Tabs */}
@@ -1270,6 +1282,20 @@ export function LeadDetailView({ initialLead }: LeadDetailViewProps) {
           </Card>
         </div>
       </div>
+
+      {/* Outreach Template Selector Modal */}
+      <OutreachTemplateModal
+        isOpen={isTemplateModalOpen}
+        onClose={() => setIsTemplateModalOpen(false)}
+        lead={lead}
+        defaultChannel={
+          selectedPitchStyle === "whatsapp"
+            ? "whatsapp"
+            : selectedPitchStyle === "instagram_dm"
+            ? "instagram_dm"
+            : "email"
+        }
+      />
     </div>
   );
 }

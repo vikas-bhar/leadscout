@@ -48,7 +48,7 @@ export function CreditBalance() {
     };
   }, []);
 
-  const available = balance?.availableCredits ?? 20;
+  const available = balance?.availableCredits ?? 100;
 
   return (
     <Link

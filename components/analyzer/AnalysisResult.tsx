@@ -33,9 +33,19 @@ interface AnalysisResultProps {
   analysis: AnalyzerResultData;
   lead?: Lead;
   onReset?: () => void;
+  isCached?: boolean;
+  onRefreshLive?: () => void;
+  isRefreshingLive?: boolean;
 }
 
-export function AnalysisResult({ analysis, lead, onReset }: AnalysisResultProps) {
+export function AnalysisResult({
+  analysis,
+  lead,
+  onReset,
+  isCached,
+  onRefreshLive,
+  isRefreshingLive,
+}: AnalysisResultProps) {
   const [copiedTab, setCopiedTab] = useState<"dm" | "email" | null>(null);
   const [isSaved, setIsSaved] = useState(false);
   const [activePitchTab, setActivePitchTab] = useState<"dm" | "email">(
@@ -137,11 +147,27 @@ export function AnalysisResult({ analysis, lead, onReset }: AnalysisResultProps)
               {renderLinkIcon()}
             </div>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <h2 className="text-base font-bold text-neutral-900">{analysis.title}</h2>
                 <span className="capitalize px-2 py-0.5 rounded text-[11px] font-semibold bg-neutral-100 text-neutral-700">
                   {analysis.linkType} Audit
                 </span>
+                {isCached && (
+                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-amber-50 text-amber-800 border border-amber-200">
+                    <span>Cached 24h</span>
+                    {onRefreshLive && (
+                      <button
+                        type="button"
+                        onClick={onRefreshLive}
+                        disabled={isRefreshingLive}
+                        className="font-semibold underline hover:text-amber-950 cursor-pointer disabled:opacity-60"
+                        title="Re-run live audit to bypass cache"
+                      >
+                        {isRefreshingLive ? "Re-analyzing..." : "Re-run Live"}
+                      </button>
+                    )}
+                  </span>
+                )}
               </div>
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-xs text-neutral-500">
                 <a

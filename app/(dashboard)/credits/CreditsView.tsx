@@ -24,6 +24,7 @@ export function CreditsView({
   const [transactions, setTransactions] = useState<CreditTransaction[]>(initialTransactions);
   const [purchasingId, setPurchasingId] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isClaimingBonus, setIsClaimingBonus] = useState(false);
 
   useEffect(() => {
     function sync() {
@@ -77,6 +78,34 @@ export function CreditsView({
       toast.info("Synced with local storage");
     } finally {
       setIsRefreshing(false);
+    }
+  }
+
+  async function handleClaimDemoBonus() {
+    setIsClaimingBonus(true);
+    try {
+      const res = await fetch("/api/credits/topup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amount: 50 }),
+      });
+      const data = await res.json();
+      if (res.ok && typeof data.newBalance === "number") {
+        setBalance((prev) => ({
+          ...prev,
+          availableCredits: data.newBalance,
+          totalCredits: Math.max((prev.totalCredits || 0) + 50, data.newBalance),
+        }));
+        toast.success(`Claimed 50 free test credits! New balance: ${data.newBalance} credits.`);
+        window.dispatchEvent(new Event("freelancefind_store_updated"));
+        void handleRefreshBalance();
+      } else {
+        toast.error(data.error || "Could not claim demo credits");
+      }
+    } catch {
+      toast.error("Network error while claiming test credits");
+    } finally {
+      setIsClaimingBonus(false);
     }
   }
 
@@ -325,10 +354,11 @@ export function CreditsView({
                   {pkg.isFree ? (
                     <Button
                       variant="outline"
-                      className="w-full text-xs font-medium text-neutral-500 border-neutral-200 bg-neutral-50 cursor-default"
-                      disabled
+                      className="w-full text-xs font-semibold text-primary border-primary/30 bg-primary/5 hover:bg-primary/10"
+                      disabled={isClaimingBonus}
+                      onClick={handleClaimDemoBonus}
                     >
-                      Included at Signup
+                      {isClaimingBonus ? "Refilling..." : "Claim +50 Free Test Credits"}
                     </Button>
                   ) : (
                     <Button

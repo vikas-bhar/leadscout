@@ -14,5 +14,5 @@ export default async function AnalyzePage() {
   const supabase = createSupabaseServerClient();
   const balance = await getCreditBalance(user.id, supabase);
 
-  return <AnalyzeView initialAvailableCredits={balance?.availableCredits ?? 20} />;
+  return <AnalyzeView initialAvailableCredits={balance?.availableCredits ?? 100} />;
 }

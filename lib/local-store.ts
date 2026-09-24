@@ -25,18 +25,18 @@ const STORAGE_KEY = "freelancefind_local_db_v1";
 
 const DEFAULT_STATE: MockStorage = {
   balance: {
-    totalCredits: 20,
+    totalCredits: 100,
     usedCredits: 0,
-    availableCredits: 20,
+    availableCredits: 100,
   },
   transactions: [
     {
       id: "initial-signup",
       userId: "demo-user-id",
       type: "bonus",
-      creditsAmount: 20,
+      creditsAmount: 100,
       action: "signup",
-      description: "Free starter credits",
+      description: "Free starter credits (100 credits)",
       searchId: null,
       stripeSession: null,
       createdAt: new Date().toISOString(),

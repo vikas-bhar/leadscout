@@ -29,9 +29,9 @@ export async function generatePitches(
   freelancerSkills: string[]
 ): Promise<PitchResult> {
   const prompt = `
-Write 3 outreach messages for this opportunity:
+Write 3 hyper-targeted outreach messages for this prospect:
 
-Business: ${business.name} (${business.category}) in ${business.city || business.address}
+Target Profile: ${business.name} (${business.category}) in ${business.city || business.address}
 Rating: ${business.rating ? `${business.rating}/5 with ${business.reviewCount} reviews` : "Unrated"}
 Biggest gap: ${analysis.gaps[0]?.problem || "Underdeveloped digital presence"}
 Hook: ${analysis.hookStatement}
@@ -47,17 +47,17 @@ Last post: ${
       : "N/A"
   }
 
-Freelancer: ${freelancerType}
+Freelancer Specialty: ${freelancerType}
 Skills: ${freelancerSkills.join(", ")}
 
-Rules:
-- DM: max 4 sentences, casual, start with specific observation
-- Email: max 6 sentences, warm professional, include subject line  
-- WhatsApp: 2-3 sentences, very direct, specific number/fact
-- Never start with "Hi I am a..." 
+IMPORTANT RULES:
+- Match their entity type: If they are a Creator/Influencer, talk about video editing, retention hooks, thumbnails, and brand sponsorship decks. If a Coach, talk about client booking funnels. If E-commerce, talk about UGC and Shopify conversions. If a Local business, talk about local customer bookings.
+- DM: max 4 sentences, casual & direct, start with a specific compliment/observation about their content.
+- Email: max 6 sentences, warm professional, include subject line.
+- WhatsApp: 2-3 sentences, very direct, reference a specific number or gap.
+- Never start with "Hi I am a..."
 - Never say "I noticed"
-- Reference actual data points (rating, follower count, days since post)
-- End with easy yes/no question
+- End with low-friction, easy yes/no question (e.g. "Mind if I send over 2 sample hooks?").
 
 Return JSON:
 {
@@ -108,10 +108,10 @@ Return valid JSON only.`,
       }
     }
 
-    // 2. Try Gemini 3.8 Flash
+    // 2. Try Gemini Flash
     if (genai) {
       const response = await genai.models.generateContent({
-        model: "gemini-3.8-flash",
+        model: "gemini-2.5-flash",
         contents: `You are an expert cold outreach copywriter. Generate hyper-personalized pitches in valid JSON only.\n\n${prompt}`,
         config: {
           responseMimeType: "application/json",

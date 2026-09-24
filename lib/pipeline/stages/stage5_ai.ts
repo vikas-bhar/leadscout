@@ -74,10 +74,10 @@ Never give generic advice. Return valid JSON only.`,
         }
       }
 
-      // 2. Try Gemini 3.8 Flash if configured
+      // 2. Try Gemini Flash if configured
       if (genai) {
         const response = await genai.models.generateContent({
-          model: "gemini-3.8-flash",
+          model: "gemini-2.5-flash",
           contents: `You are an elite business analyst for freelancers. Analyze this business and identify concrete gaps based on the data. Return pure valid JSON only matching the schema.\n\n${prompt}`,
           config: {
             responseMimeType: "application/json",
@@ -131,11 +131,22 @@ function buildAnalysisPrompt(
   freelancerSkills: string[]
 ): string {
   return `
-Analyze this business for a ${freelancerType} 
+Analyze this profile/business for a ${freelancerType} 
 with skills: ${freelancerSkills.join(", ")}
 
-GOOGLE MAPS DATA:
-Business: ${business.name} (${business.category})
+IMPORTANT DOMAIN KNOWLEDGE:
+Understand that not all profiles are local brick-and-mortar stores. Some are:
+- Content Creators / Influencers (need brand sponsorships, media kits, viral short-form video editing, retention pacing, YouTube repurposing)
+- Coaches / Consultants / Speakers (need high-ticket booking funnels, ManyChat DM automation, VSLs)
+- E-commerce / D2C Brands (need UGC video ads, Shopify conversion rate optimization, email flows)
+- Artists / Musicians (need Spotify pre-saves, behind-the-scenes video storytelling, merch drops)
+- Media Channels / Podcasts (need viral micro-clips, animated subtitles, newsletter opt-ins)
+- Local Businesses (need local foot traffic, mobile booking funnels, Google Maps reviews)
+
+Determine their true archetype and tailor your identified gaps, best services, and pitch angle to what they actually do!
+
+GOOGLE / DIRECTORY DATA:
+Name: ${business.name} (${business.category})
 Location: ${business.address}
 Rating: ${business.rating ?? "No rating"}/5 
 Reviews: ${business.reviewCount}
@@ -170,11 +181,11 @@ Return JSON with:
   "estimatedMonthlyBudget": "$1,000 - $3,000",
   "gaps": [
     {
-      "category": "Website / Social / Reviews",
-      "problem": "exact issue",
-      "impact": "revenue or inquiry loss",
+      "category": "Short-Form Video / Brand Sponsorships / Bio Funnel / Website",
+      "problem": "exact issue tailored to their creator/business archetype",
+      "impact": "revenue, brand deal, or audience loss",
       "severity": "low" | "medium" | "high",
-      "yourSolution": "specific service deliverable"
+      "yourSolution": "specific service deliverable freelancer provides"
     }
   ],
   "strengthsFound": ["string"],

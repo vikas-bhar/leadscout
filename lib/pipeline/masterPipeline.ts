@@ -2,8 +2,7 @@ import { scrapeGoogleMaps } from "./stages/stage1_maps";
 import { filterAndScore } from "./stages/stage2_filter";
 import { scrapeInstagram } from "./stages/stage3_instagram";
 import { enrichBusinessData } from "./stages/stage4_enrich";
-import { analyzeWithAI } from "./stages/stage5_ai";
-import { generatePitches } from "./stages/stage6_pitch";
+import { runGeminiAnalysis } from "../gemini/pipeline";
 import { rankLeads, RankedLead } from "./stages/stage7_rank";
 import { createSupabaseServiceClient } from "@/lib/supabase";
 import { deductCredits, addCredits } from "@/lib/credits";
@@ -38,18 +37,6 @@ export function calculateCredits(resultCount: number): number {
     resultCount * PIPELINE_CONFIG.credits.aiAnalysisEach +
     resultCount * PIPELINE_CONFIG.credits.pitchGenerationEach
   );
-}
-
-function chunkArray<T>(array: T[], size: number): T[][] {
-  const chunks: T[][] = [];
-  for (let i = 0; i < array.length; i += size) {
-    chunks.push(array.slice(i, i + size));
-  }
-  return chunks;
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 export async function runPipeline(
@@ -124,70 +111,20 @@ export async function runPipeline(
       )
     );
 
-    // Step 6 — AI Gap Analysis (in batches)
-    await onProgress(6, TOTAL_STEPS, "Executing multi-point AI gap analysis...");
-    const analyzed: Array<{
-      business: typeof enriched[0];
-      analysis: Awaited<ReturnType<typeof analyzeWithAI>>;
-    }> = [];
-    const aiBatches = chunkArray(enriched, PIPELINE_CONFIG.batches.aiPerBatch);
-
-    for (let i = 0; i < aiBatches.length; i++) {
-      const batch = aiBatches[i];
-      await onProgress(
-        6,
-        TOTAL_STEPS,
-        `Analyzing businesses ${i * PIPELINE_CONFIG.batches.aiPerBatch + 1}-${Math.min(
-          (i + 1) * PIPELINE_CONFIG.batches.aiPerBatch,
-          enriched.length
-        )} with AI...`
-      );
-
-      const batchResults = await Promise.allSettled(
-        batch.map((business) =>
-          analyzeWithAI(business, input.freelancerType, skills)
-        )
-      );
-
-      batchResults.forEach((result, index) => {
-        if (result.status === "fulfilled") {
-          analyzed.push({ business: batch[index], analysis: result.value });
-        }
-      });
-
-      if (i < aiBatches.length - 1) {
-        await sleep(PIPELINE_CONFIG.batches.delayBetweenBatches);
+    // Step 6 & 7 — Gemini Intelligence Analysis & Pitch Synthesis
+    await onProgress(6, TOTAL_STEPS, "Running Gemini intelligence analysis and pitch synthesis...");
+    const { results } = await runGeminiAnalysis(
+      enriched,
+      input.freelancerType,
+      skills,
+      async (msg) => {
+        await onProgress(6, TOTAL_STEPS, msg);
       }
-    }
-
-    // Step 7 — Generate Pitches (in batches)
-    await onProgress(7, TOTAL_STEPS, "Synthesizing customized cold outreach pitches...");
-    const withPitches: Array<{
-      business: typeof enriched[0];
-      analysis: Awaited<ReturnType<typeof analyzeWithAI>>;
-      pitches: Awaited<ReturnType<typeof generatePitches>>;
-    }> = [];
-    const pitchBatches = chunkArray(analyzed, PIPELINE_CONFIG.batches.aiPerBatch);
-
-    for (const batch of pitchBatches) {
-      const results = await Promise.allSettled(
-        batch.map(({ business, analysis }) =>
-          generatePitches(business, analysis, input.freelancerType, skills).then(
-            (pitches) => ({ business, analysis, pitches })
-          )
-        )
-      );
-      results.forEach((r) => {
-        if (r.status === "fulfilled") {
-          withPitches.push(r.value);
-        }
-      });
-      await sleep(500);
-    }
+    );
 
     // Step 8 — Rank and Save Everything
     await onProgress(8, TOTAL_STEPS, "Calculating weighted scores and persisting results...");
-    const ranked = rankLeads(withPitches);
+    const ranked = rankLeads(results);
 
     // Persist to Supabase Database
     const leadsToInsert = ranked.map((lead) => ({

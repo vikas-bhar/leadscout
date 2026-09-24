@@ -152,6 +152,11 @@ export function AnalysisResult({
                 <span className="capitalize px-2 py-0.5 rounded text-[11px] font-semibold bg-neutral-100 text-neutral-700">
                   {analysis.linkType} Audit
                 </span>
+                {typeof analysis.metadata?.entityLabel === "string" && (
+                  <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-purple-50 text-purple-700 border border-purple-200">
+                    {analysis.metadata.entityLabel}
+                  </span>
+                )}
                 {isCached && (
                   <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-amber-50 text-amber-800 border border-amber-200">
                     <span>Cached 24h</span>

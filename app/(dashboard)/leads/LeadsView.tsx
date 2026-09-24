@@ -347,9 +347,10 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
   const filteredLeads = useMemo(() => {
     return normalizedLeads
       .filter((l) => {
-        // 1. Tier filter
+        // 1. Tier filter (score tier)
         if (filterTier !== "all") {
-          if (getLeadTier(l) !== filterTier) return false;
+          const tier = getLeadTier(l);
+          if (tier !== filterTier) return false;
         }
         return true;
       })
@@ -361,18 +362,48 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
         return true;
       })
       .filter((l) => {
-        // 3. Location filter
+        // 3. Location filter: robust token & substring matching
         if (selectedLocation === "all") return true;
         const target = selectedLocation.toLowerCase().trim();
         const leadLoc = (l.location || "").toLowerCase().trim();
-        return leadLoc.includes(target);
+        if (!leadLoc) return false;
+        if (leadLoc.includes(target) || target.includes(leadLoc)) return true;
+
+        // Extract meaningful tokens (e.g. "Dubai", "Jumeirah", "Austin", "London")
+        const targetTokens = target
+          .split(/[,\s/]+/)
+          .map((t) => t.trim())
+          .filter((t) => t.length >= 3 && !["and", "the", "for", "near"].includes(t));
+
+        if (targetTokens.length > 0) {
+          return targetTokens.some((tok) => leadLoc.includes(tok));
+        }
+        return false;
       })
       .filter((l) => {
-        // 4. Industry Type filter
+        // 4. Industry Type filter: robust singular/plural and token matching
         if (selectedIndustry === "all") return true;
         const target = selectedIndustry.toLowerCase().trim();
+        const targetNormalized = target.replace(/s$/, "").replace(/ies$/, "y");
         const leadCat = (l.businessCategory || "").toLowerCase().trim();
-        return leadCat === target || leadCat.includes(target);
+        const leadCatNormalized = leadCat.replace(/s$/, "").replace(/ies$/, "y");
+
+        if (
+          leadCat === target ||
+          leadCat.includes(target) ||
+          target.includes(leadCat) ||
+          leadCatNormalized.includes(targetNormalized) ||
+          targetNormalized.includes(leadCatNormalized)
+        ) {
+          return true;
+        }
+
+        const tokens = targetNormalized
+          .split(/[\s/&]+/)
+          .map((t) => t.trim())
+          .filter((t) => t.length >= 3);
+
+        return tokens.some((tok) => leadCatNormalized.includes(tok));
       })
       .filter((l) => {
         // 5. Tag filter
@@ -383,40 +414,44 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
         );
       })
       .filter((l) => {
-        // 6. Digital Gap filter
+        // 6. Digital Gap filter: broadened multi-signal detection
         if (filterGap === "all") return true;
+        const allGapText = (l.gapsFound || [])
+          .map((g) => `${g.category} ${g.problem} ${g.impact || ""} ${g.yourSolution || ""}`)
+          .join(" ")
+          .toLowerCase();
+
         if (filterGap === "missing_website") {
           return (
             !l.hasWebsite ||
             !l.websiteUrl ||
-            (l.gapsFound || []).some((g) =>
-              /website|no web|online presence/i.test(g.category + " " + g.problem)
-            )
+            /website|no web|online presence|domain|landing page/i.test(allGapText)
           );
         }
         if (filterGap === "mobile_ux") {
-          return (l.gapsFound || []).some((g) =>
-            /mobile|speed|responsive|booking|screen|layout/i.test(
-              g.category + " " + g.problem
+          return (
+            /mobile|speed|responsive|booking|screen|layout|ux|load|navigation|checkout|friction/i.test(
+              allGapText
             )
           );
         }
         if (filterGap === "no_reels") {
           return (
             !l.usesReels ||
-            (l.gapsFound || []).some((g) =>
-              /reel|video|tiktok|short-form/i.test(g.category + " " + g.problem)
-            )
+            /reel|video|tiktok|short-form|content|post|clip/i.test(allGapText)
           );
         }
         if (filterGap === "missing_instagram") {
-          return !l.instagramHandle;
+          return !l.instagramHandle || /instagram|social|ig handle|profile/i.test(allGapText);
         }
         if (filterGap === "missing_phone") {
-          return !l.phone;
+          return !l.phone || /phone|call|contact|dial/i.test(allGapText);
         }
         if (filterGap === "low_rating") {
-          return l.googleRating < 4.5;
+          return (
+            l.googleRating < 4.5 ||
+            /review|rating|reputation|feedback|unanswered/i.test(allGapText)
+          );
         }
         return true;
       })
@@ -491,8 +526,11 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
     if (minScore > 0 || maxScore < 100) count++;
     if (selectedLocation !== "all") count++;
     if (selectedIndustry !== "all") count++;
+    if (filterGap !== "all") count++;
+    if (filterTier !== "all") count++;
+    if (selectedTag !== "all") count++;
     return count;
-  }, [minScore, maxScore, selectedLocation, selectedIndustry]);
+  }, [minScore, maxScore, selectedLocation, selectedIndustry, filterGap, filterTier, selectedTag]);
 
   const hasActiveFilters =
     filterTier !== "all" ||
@@ -516,20 +554,48 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
     setSearchQuery("");
   }
 
+  function handleTierClick(tier: "all" | "high" | "medium" | "low") {
+    if (filterTier === tier && tier !== "all") {
+      setFilterTier("all");
+      setMinScore(0);
+      setMaxScore(100);
+    } else {
+      setFilterTier(tier);
+      if (tier === "all") {
+        setMinScore(0);
+        setMaxScore(100);
+      } else if (tier === "high") {
+        setMinScore(75);
+        setMaxScore(100);
+      } else if (tier === "medium") {
+        setMinScore(60);
+        setMaxScore(74);
+      } else if (tier === "low") {
+        setMinScore(0);
+        setMaxScore(59);
+      }
+    }
+  }
+
   function handleScorePreset(preset: "all" | "elite" | "high" | "moderate" | "low") {
     if (preset === "all") {
+      setFilterTier("all");
       setMinScore(0);
       setMaxScore(100);
     } else if (preset === "elite") {
+      setFilterTier("all");
       setMinScore(85);
       setMaxScore(100);
     } else if (preset === "high") {
+      setFilterTier("high");
       setMinScore(75);
       setMaxScore(100);
     } else if (preset === "moderate") {
+      setFilterTier("medium");
       setMinScore(60);
       setMaxScore(74);
     } else if (preset === "low") {
+      setFilterTier("low");
       setMinScore(0);
       setMaxScore(59);
     }
@@ -580,7 +646,7 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
       {/* Summary Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
         <div
-          onClick={() => setFilterTier("all")}
+          onClick={() => handleTierClick("all")}
           className={cn(
             "p-4 rounded-xl border bg-white cursor-pointer transition-all duration-200 select-none",
             filterTier === "all" ? "ring-2 ring-primary border-primary shadow-sm" : "border-neutral-200 hover:border-neutral-300"
@@ -595,7 +661,7 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
         </div>
 
         <div
-          onClick={() => setFilterTier(filterTier === "high" ? "all" : "high")}
+          onClick={() => handleTierClick("high")}
           className={cn(
             "p-4 rounded-xl border bg-white cursor-pointer transition-all duration-200 select-none",
             filterTier === "high" ? "ring-2 ring-rose-500 border-rose-500 shadow-sm" : "border-neutral-200 hover:border-neutral-300"
@@ -610,7 +676,7 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
         </div>
 
         <div
-          onClick={() => setFilterTier(filterTier === "medium" ? "all" : "medium")}
+          onClick={() => handleTierClick("medium")}
           className={cn(
             "p-4 rounded-xl border bg-white cursor-pointer transition-all duration-200 select-none",
             filterTier === "medium" ? "ring-2 ring-amber-500 border-amber-500 shadow-sm" : "border-neutral-200 hover:border-neutral-300"
@@ -621,11 +687,11 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
             <TrendingUp className="h-4 w-4 text-amber-600" />
           </div>
           <div className="mt-2 text-2xl font-bold text-neutral-900">{mediumCount}</div>
-          <div className="mt-1 text-[11px] text-neutral-500">Score 65–74</div>
+          <div className="mt-1 text-[11px] text-neutral-500">Score 60–74</div>
         </div>
 
         <div
-          onClick={() => setFilterTier(filterTier === "low" ? "all" : "low")}
+          onClick={() => handleTierClick("low")}
           className={cn(
             "p-4 rounded-xl border bg-white cursor-pointer transition-all duration-200 select-none",
             filterTier === "low" ? "ring-2 ring-neutral-400 border-neutral-400 shadow-sm" : "border-neutral-200 hover:border-neutral-300"
@@ -636,7 +702,7 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
             <CheckCircle2 className="h-4 w-4 text-emerald-600" />
           </div>
           <div className="mt-2 text-2xl font-bold text-neutral-900">{lowCount}</div>
-          <div className="mt-1 text-[11px] text-neutral-500">Score &lt; 65</div>
+          <div className="mt-1 text-[11px] text-neutral-500">Score &lt; 60</div>
         </div>
       </div>
 
@@ -1003,6 +1069,7 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
                     onChange={(e) => {
                       const val = Number(e.target.value);
                       setMinScore(val);
+                      setFilterTier("all");
                       if (val > maxScore) setMaxScore(100);
                     }}
                     className="w-full h-1.5 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-rose-600"

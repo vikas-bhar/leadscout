@@ -1,14 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { Mail, User, Info, CheckCircle2, Sparkles } from "lucide-react";
+import { Mail, User, Info, CheckCircle2, Sparkles, Cpu } from "lucide-react";
 import { TemplatesManager } from "@/components/settings/TemplatesManager";
 import { FreelancerProfileForm } from "@/components/settings/FreelancerProfileForm";
+import { McpIntegrationHub } from "@/components/settings/McpIntegrationHub";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
 export function SettingsClient() {
-  const [activeTab, setActiveTab] = useState<"templates" | "profile" | "guide">("templates");
+  const [activeTab, setActiveTab] = useState<"templates" | "profile" | "mcp" | "guide">("templates");
 
   return (
     <div className="max-w-6xl mx-auto space-y-6 pb-16">
@@ -16,17 +17,17 @@ export function SettingsClient() {
       <div>
         <h1 className="text-xl font-bold text-neutral-900 tracking-tight">Settings & Outreach Automation</h1>
         <p className="text-xs text-neutral-500 mt-1">
-          Configure customizable outreach email templates, variables, and freelancer signature for 1-click pitches.
+          Configure customizable outreach email templates, variables, signature, and Model Context Protocol (MCP) integrations.
         </p>
       </div>
 
       {/* Tabs Header */}
-      <div className="flex border-b border-neutral-200 gap-6">
+      <div className="flex border-b border-neutral-200 gap-6 overflow-x-auto">
         <button
           type="button"
           onClick={() => setActiveTab("templates")}
           className={cn(
-            "pb-3 text-xs font-semibold border-b-2 transition-colors flex items-center gap-1.5",
+            "pb-3 text-xs font-semibold border-b-2 transition-colors flex items-center gap-1.5 whitespace-nowrap",
             activeTab === "templates"
               ? "border-primary text-primary font-bold"
               : "border-transparent text-neutral-500 hover:text-neutral-800"
@@ -40,7 +41,7 @@ export function SettingsClient() {
           type="button"
           onClick={() => setActiveTab("profile")}
           className={cn(
-            "pb-3 text-xs font-semibold border-b-2 transition-colors flex items-center gap-1.5",
+            "pb-3 text-xs font-semibold border-b-2 transition-colors flex items-center gap-1.5 whitespace-nowrap",
             activeTab === "profile"
               ? "border-primary text-primary font-bold"
               : "border-transparent text-neutral-500 hover:text-neutral-800"
@@ -52,9 +53,23 @@ export function SettingsClient() {
 
         <button
           type="button"
+          onClick={() => setActiveTab("mcp")}
+          className={cn(
+            "pb-3 text-xs font-semibold border-b-2 transition-colors flex items-center gap-1.5 whitespace-nowrap",
+            activeTab === "mcp"
+              ? "border-primary text-primary font-bold"
+              : "border-transparent text-neutral-500 hover:text-neutral-800"
+          )}
+        >
+          <Cpu className="h-3.5 w-3.5 text-indigo-500" />
+          MCP Tool & Agent Server
+        </button>
+
+        <button
+          type="button"
           onClick={() => setActiveTab("guide")}
           className={cn(
-            "pb-3 text-xs font-semibold border-b-2 transition-colors flex items-center gap-1.5",
+            "pb-3 text-xs font-semibold border-b-2 transition-colors flex items-center gap-1.5 whitespace-nowrap",
             activeTab === "guide"
               ? "border-primary text-primary font-bold"
               : "border-transparent text-neutral-500 hover:text-neutral-800"
@@ -69,6 +84,8 @@ export function SettingsClient() {
       {activeTab === "templates" && <TemplatesManager />}
 
       {activeTab === "profile" && <FreelancerProfileForm />}
+
+      {activeTab === "mcp" && <McpIntegrationHub />}
 
       {activeTab === "guide" && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

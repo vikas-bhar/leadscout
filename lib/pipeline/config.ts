@@ -8,37 +8,37 @@ export const PIPELINE_CONFIG = {
     facebook: "apify/facebook-pages-scraper",
   },
 
-  // Timeouts in milliseconds
+  // Optimized timeouts in milliseconds (ultra fast execution)
   timeouts: {
-    googleMaps: 120000, // 2 minutes
-    instagram: 90000, // 90 seconds
-    website: 60000, // 1 minute
-    ai: 30000, // 30 seconds per business
-    totalPipeline: 600000, // 10 minutes max
+    googleMaps: 15000, // 15 seconds max for Maps
+    instagram: 8000, // 8 seconds max for Instagram
+    website: 10000, // 10 seconds max
+    ai: 10000, // 10 seconds per AI task
+    totalPipeline: 60000, // 60 seconds max
   },
 
-  // Retry settings
+  // Fast retry settings
   retries: {
-    googleMaps: 3,
-    instagram: 2,
-    ai: 2,
-    delayBetweenRetries: 2000, // 2 seconds
+    googleMaps: 1, // 1 attempt then instant AI fallback
+    instagram: 1,
+    ai: 1,
+    delayBetweenRetries: 500,
   },
 
-  // Batch sizes
+  // Parallel batch sizes
   batches: {
-    instagramPerBatch: 5, // check 5 Instagram at a time
-    aiPerBatch: 3, // analyze 3 businesses at a time
-    delayBetweenBatches: 1000, // 1 second between batches
+    instagramPerBatch: 10, // process 10 Instagram accounts in parallel
+    aiPerBatch: 8, // analyze 8 businesses simultaneously
+    delayBetweenBatches: 50,
   },
 
-  // Filtering thresholds
+  // Balanced filtering thresholds
   filters: {
-    minReviewsToInclude: 3,
-    maxRatingToInclude: 4.5, // skip perfect businesses
-    minPhotoCountForGap: 5, // below 5 photos = gap
-    maxPostAgeForActiveAccount: 30, // days
-    minEngagementRateForHealthy: 1.5, // percent
+    minReviewsToInclude: 0, // include all businesses (even new ones that need help!)
+    maxRatingToInclude: 5.0, // evaluate all businesses based on overall gaps
+    minPhotoCountForGap: 8, // below 8 photos = visual gap
+    maxPostAgeForActiveAccount: 21, // days
+    minEngagementRateForHealthy: 2.0, // percent
   },
 
   // Credit costs

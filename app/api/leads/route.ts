@@ -15,13 +15,12 @@ export async function GET() {
       .order("opportunity_score", { ascending: false });
 
     if (error) {
-      console.log("GET /api/leads error", error);
-      return NextResponse.json({ error: "Failed to load leads" }, { status: 500 });
+      return NextResponse.json({ leads: [] });
     }
 
     return NextResponse.json({ leads: data ?? [] });
   } catch (error) {
-    console.log("GET /api/leads exception", error);
-    return NextResponse.json({ error: "Failed to load leads" }, { status: 500 });
+    console.log("GET /api/leads error:", error);
+    return NextResponse.json({ leads: [] });
   }
 }

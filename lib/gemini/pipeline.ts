@@ -3,20 +3,12 @@ import { generatePitchWithGemini, PitchOutput } from "./analyzers/pitchGenerator
 import { analyzeBatchWithGemini } from "./analyzers/batchAnalyzer";
 import { EnrichedBusiness } from "../pipeline/stages/stage4_enrich";
 
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
 export async function runGeminiAnalysis(
   businesses: EnrichedBusiness[],
   freelancerType: string,
   freelancerSkills: string[],
   onProgress?: (message: string, current: number, total: number) => void
 ) {
-  const results: Array<{
-    business: EnrichedBusiness;
-    analysis: BusinessAnalysisOutput;
-    pitches: PitchOutput;
-  }> = [];
-
   onProgress?.("Quick-scoring all businesses with Gemini...", 1, 3);
   const batchScores = await analyzeBatchWithGemini({
     businesses: businesses.map((b) => ({
@@ -43,77 +35,79 @@ export async function runGeminiAnalysis(
     return sB - sA;
   });
 
-  onProgress?.("Deep analyzing top opportunities with Gemini Flash...", 2, 3);
-  const topBusinesses = ranked.slice(0, Math.min(ranked.length, 15));
+  onProgress?.("Synthesizing personalized growth pitches with Gemini...", 2, 3);
+  const topBusinesses = ranked.slice(0, Math.min(ranked.length, 12));
 
-  for (let i = 0; i < topBusinesses.length; i++) {
-    const business = topBusinesses[i];
-    onProgress?.(`Deep analyzing ${business.name} (${i + 1}/${topBusinesses.length})...`, 2, 3);
+  // Run deep analysis concurrently in parallel for lightning fast execution
+  const settledResults = await Promise.allSettled(
+    topBusinesses.map(async (business) => {
+      try {
+        const analysis = await analyzeBusinessWithGemini({
+          businessName: business.name,
+          category: business.category,
+          location: business.address,
+          city: business.city || "",
+          country: business.country || "",
+          rating: business.rating,
+          reviewCount: business.reviewCount,
+          unansweredNegativeReviews: business.unansweredNegativeReviews,
+          hasWebsite: !business.gaps.noWebsite,
+          websiteUrl: business.website,
+          photoCount: business.photoCount,
+          hasPhone: !business.gaps.noPhone,
+          hasHours: !business.gaps.missingHours,
+          priceLevel: business.priceLevel,
+          recentReviews: business.reviews || [],
+          hasInstagram: business.instagram.found,
+          instagramUsername: business.instagram.username,
+          followers: business.instagram.followers,
+          following: business.instagram.following,
+          postsCount: business.instagram.postsCount,
+          lastPostDate: business.instagram.lastPostDate,
+          daysSinceLastPost: business.instagram.daysSinceLastPost,
+          postsPerWeek: business.instagram.postsPerWeek,
+          avgLikes: business.instagram.avgLikesPerPost,
+          avgComments: business.instagram.avgCommentsPerPost,
+          engagementRate: business.instagram.engagementRate,
+          usesReels: business.instagram.usesReels,
+          hasLinkInBio: business.instagram.hasLinkInBio,
+          bio: business.instagram.bio,
+          industryAvgEngagement: business.industryBenchmarks.avgEngagement,
+          industryAvgFollowers: business.industryBenchmarks.avgFollowers,
+          industryPostFrequency: business.industryBenchmarks.avgPostFrequency,
+          freelancerType,
+          freelancerSkills,
+        });
 
-    try {
-      const analysis = await analyzeBusinessWithGemini({
-        businessName: business.name,
-        category: business.category,
-        location: business.address,
-        city: business.city || "",
-        country: business.country || "",
-        rating: business.rating,
-        reviewCount: business.reviewCount,
-        unansweredNegativeReviews: business.unansweredNegativeReviews,
-        hasWebsite: !business.gaps.noWebsite,
-        websiteUrl: business.website,
-        photoCount: business.photoCount,
-        hasPhone: !business.gaps.noPhone,
-        hasHours: !business.gaps.missingHours,
-        priceLevel: business.priceLevel,
-        recentReviews: business.reviews || [],
-        hasInstagram: business.instagram.found,
-        instagramUsername: business.instagram.username,
-        followers: business.instagram.followers,
-        following: business.instagram.following,
-        postsCount: business.instagram.postsCount,
-        lastPostDate: business.instagram.lastPostDate,
-        daysSinceLastPost: business.instagram.daysSinceLastPost,
-        postsPerWeek: business.instagram.postsPerWeek,
-        avgLikes: business.instagram.avgLikesPerPost,
-        avgComments: business.instagram.avgCommentsPerPost,
-        engagementRate: business.instagram.engagementRate,
-        usesReels: business.instagram.usesReels,
-        hasLinkInBio: business.instagram.hasLinkInBio,
-        bio: business.instagram.bio,
-        industryAvgEngagement: business.industryBenchmarks.avgEngagement,
-        industryAvgFollowers: business.industryBenchmarks.avgFollowers,
-        industryPostFrequency: business.industryBenchmarks.avgPostFrequency,
-        freelancerType,
-        freelancerSkills,
-      });
+        const pitches = await generatePitchWithGemini({
+          businessName: business.name,
+          category: business.category,
+          city: business.city || "",
+          primaryGap: analysis.gaps[0]?.problem || "",
+          hookStatement: analysis.hookStatement,
+          pitchAngle: analysis.pitchAngle,
+          instagramHandle: business.instagram.username,
+          followers: business.instagram.followers,
+          daysSinceLastPost: business.instagram.daysSinceLastPost,
+          engagementRate: business.instagram.engagementRate,
+          hasWebsite: !business.gaps.noWebsite,
+          rating: business.rating,
+          reviewCount: business.reviewCount,
+          freelancerType,
+          freelancerSkills,
+        });
 
-      const pitches = await generatePitchWithGemini({
-        businessName: business.name,
-        category: business.category,
-        city: business.city || "",
-        primaryGap: analysis.gaps[0]?.problem || "",
-        hookStatement: analysis.hookStatement,
-        pitchAngle: analysis.pitchAngle,
-        instagramHandle: business.instagram.username,
-        followers: business.instagram.followers,
-        daysSinceLastPost: business.instagram.daysSinceLastPost,
-        engagementRate: business.instagram.engagementRate,
-        hasWebsite: !business.gaps.noWebsite,
-        rating: business.rating,
-        reviewCount: business.reviewCount,
-        freelancerType,
-        freelancerSkills,
-      });
+        return { business, analysis, pitches };
+      } catch (err) {
+        console.error(`Analysis fallback for ${business.name}:`, err);
+        return createFallbackAnalysis(business);
+      }
+    })
+  );
 
-      results.push({ business, analysis, pitches });
-    } catch (err) {
-      console.error(`Failed to analyze ${business.name}:`, err);
-      results.push(createFallbackAnalysis(business));
-    }
-
-    if (i < topBusinesses.length - 1) await sleep(200);
-  }
+  const results = settledResults.map((r, idx) =>
+    r.status === "fulfilled" ? r.value : createFallbackAnalysis(topBusinesses[idx])
+  );
 
   onProgress?.("Gemini analysis complete!", 3, 3);
   return { results, marketInsights: batchScores.marketInsights };

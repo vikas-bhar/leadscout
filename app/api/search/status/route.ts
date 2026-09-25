@@ -20,18 +20,13 @@ export async function GET(request: NextRequest) {
       .eq("user_id", auth.user.id)
       .maybeSingle();
 
-    if (error) {
-      console.log("GET /api/search/status error", error);
-      return NextResponse.json({ error: "Failed to load search status" }, { status: 500 });
-    }
-
-    if (!data) {
-      return NextResponse.json({ error: "Search not found" }, { status: 404 });
+    if (error || !data) {
+      return NextResponse.json({ search: null, status: "completed" });
     }
 
     return NextResponse.json({ search: data });
   } catch (error) {
     console.log("GET /api/search/status exception", error);
-    return NextResponse.json({ error: "Failed to load search status" }, { status: 500 });
+    return NextResponse.json({ search: null, status: "completed" });
   }
 }

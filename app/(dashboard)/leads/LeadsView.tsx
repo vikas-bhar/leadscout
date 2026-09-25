@@ -302,9 +302,8 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
     normalizedLeads.forEach((l) => {
       const loc = (l.location || "").trim();
       if (!loc) return;
-      // Extract city or district if comma-separated, or use the location string
       const parts = loc.split(",").map((p) => p.trim()).filter(Boolean);
-      // Main locality identifier (e.g., "Austin, TX", "Dubai", "London", or district)
+      // Clean locality identifier
       const primaryLoc = parts.length >= 2 ? `${parts[parts.length - 2]}, ${parts[parts.length - 1]}` : loc;
       
       const entry = map.get(primaryLoc) || map.get(loc) || { count: 0, totalScore: 0 };
@@ -356,9 +355,8 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
       })
       .filter((l) => {
         // 2. Opportunity Score range filter
-        if (l.opportunityScore < minScore || l.opportunityScore > maxScore) {
-          return false;
-        }
+        if (minScore > 0 && l.opportunityScore < minScore) return false;
+        if (maxScore < 100 && l.opportunityScore > maxScore) return false;
         return true;
       })
       .filter((l) => {
@@ -369,11 +367,11 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
         if (!leadLoc) return false;
         if (leadLoc.includes(target) || target.includes(leadLoc)) return true;
 
-        // Extract meaningful tokens (e.g. "Dubai", "Jumeirah", "Austin", "London")
+        // Token match: check state/city tokens (min 2 chars for NY, TX, UK etc.)
         const targetTokens = target
           .split(/[,\s/]+/)
           .map((t) => t.trim())
-          .filter((t) => t.length >= 3 && !["and", "the", "for", "near"].includes(t));
+          .filter((t) => t.length >= 2 && !["and", "the", "for", "near"].includes(t));
 
         if (targetTokens.length > 0) {
           return targetTokens.some((tok) => leadLoc.includes(tok));
@@ -384,14 +382,16 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
         // 4. Industry Type filter: robust singular/plural and token matching
         if (selectedIndustry === "all") return true;
         const target = selectedIndustry.toLowerCase().trim();
-        const targetNormalized = target.replace(/s$/, "").replace(/ies$/, "y");
         const leadCat = (l.businessCategory || "").toLowerCase().trim();
+
+        if (leadCat === target || leadCat.includes(target) || target.includes(leadCat)) {
+          return true;
+        }
+
+        const targetNormalized = target.replace(/s$/, "").replace(/ies$/, "y");
         const leadCatNormalized = leadCat.replace(/s$/, "").replace(/ies$/, "y");
 
         if (
-          leadCat === target ||
-          leadCat.includes(target) ||
-          target.includes(leadCat) ||
           leadCatNormalized.includes(targetNormalized) ||
           targetNormalized.includes(leadCatNormalized)
         ) {
@@ -555,25 +555,10 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
   }
 
   function handleTierClick(tier: "all" | "high" | "medium" | "low") {
-    if (filterTier === tier && tier !== "all") {
+    if (filterTier === tier) {
       setFilterTier("all");
-      setMinScore(0);
-      setMaxScore(100);
     } else {
       setFilterTier(tier);
-      if (tier === "all") {
-        setMinScore(0);
-        setMaxScore(100);
-      } else if (tier === "high") {
-        setMinScore(75);
-        setMaxScore(100);
-      } else if (tier === "medium") {
-        setMinScore(60);
-        setMaxScore(74);
-      } else if (tier === "low") {
-        setMinScore(0);
-        setMaxScore(59);
-      }
     }
   }
 
@@ -588,16 +573,16 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
       setMaxScore(100);
     } else if (preset === "high") {
       setFilterTier("high");
-      setMinScore(75);
+      setMinScore(0);
       setMaxScore(100);
     } else if (preset === "moderate") {
       setFilterTier("medium");
-      setMinScore(60);
-      setMaxScore(74);
+      setMinScore(0);
+      setMaxScore(100);
     } else if (preset === "low") {
       setFilterTier("low");
       setMinScore(0);
-      setMaxScore(59);
+      setMaxScore(100);
     }
   }
 

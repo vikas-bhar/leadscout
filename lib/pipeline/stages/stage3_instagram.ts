@@ -1,6 +1,7 @@
 import { ApifyClient } from "apify-client";
 import { PIPELINE_CONFIG } from "../config";
 import { FilteredBusiness } from "./stage2_filter";
+import { processInstagramData } from "../dataQuality";
 
 const token = process.env.APIFY_API_TOKEN || process.env.APIFY_TOKEN;
 const client = token ? new ApifyClient({ token }) : null;
@@ -101,7 +102,7 @@ async function findInstagramProfile(
       .call(
         {
           searchTerms: [searchQuery],
-          resultsLimit: 1,
+          resultsLimit: 3,
         },
         {
           timeout: PIPELINE_CONFIG.timeouts.instagram,
@@ -110,51 +111,40 @@ async function findInstagramProfile(
 
     const { items } = await client.dataset(run.defaultDatasetId).listItems();
 
-    if (!items || items.length === 0) {
+    // Use data quality processor
+    const cleanedProfile = processInstagramData(
+      (items || []) as Array<Record<string, unknown>>,
+      business.name
+    );
+
+    if (!cleanedProfile) {
       return createEmptyInstagramData();
     }
 
-    const profile = items[0] as Record<string, unknown>;
+    const daysSinceLastPost = cleanedProfile.daysSinceLastPost;
+    const engagementRate = cleanedProfile.engagementRate;
+    const followers = cleanedProfile.followers;
+    const postsPerWeek = cleanedProfile.postsPerWeek;
 
-    // Calculate derived metrics
-    const lastPostDate = (profile.latestPostDate || profile.lastPostDate) as string | undefined;
-    const daysSinceLastPost = lastPostDate
-      ? Math.floor((Date.now() - new Date(lastPostDate).getTime()) / (1000 * 60 * 60 * 24))
-      : null;
-
-    const postsCount = Number(profile.postsCount || 0);
-    const accountAge = Number(profile.accountAge || 365);
-    const postsPerWeek = postsCount && accountAge
-      ? Number((postsCount / (accountAge / 7)).toFixed(1))
-      : null;
-
-    const followers = Number(profile.followersCount || 0);
-    const avgLikes = Number(profile.avgLikesPerPost || 0);
-    const engagementRate = followers > 0
-      ? Number(((avgLikes / followers) * 100).toFixed(2))
-      : null;
-
-    const username = profile.username ? String(profile.username) : null;
-
-    const instagramData: InstagramData = {
+    return {
       found: true,
-      username,
-      fullName: profile.fullName ? String(profile.fullName) : null,
-      bio: profile.biography ? String(profile.biography) : (profile.bio ? String(profile.bio) : null),
-      followers: followers || null,
-      following: profile.followingCount ? Number(profile.followingCount) : null,
-      postsCount: postsCount || null,
-      lastPostDate: lastPostDate || null,
+      username: cleanedProfile.username,
+      fullName: cleanedProfile.fullName,
+      bio: cleanedProfile.bio,
+      followers: cleanedProfile.followers,
+      following: cleanedProfile.following,
+      postsCount: cleanedProfile.postsCount,
+      lastPostDate: cleanedProfile.lastPostDate,
       daysSinceLastPost,
       postsPerWeek,
-      avgLikesPerPost: profile.avgLikesPerPost ? Number(profile.avgLikesPerPost) : null,
-      avgCommentsPerPost: profile.avgCommentsPerPost ? Number(profile.avgCommentsPerPost) : null,
+      avgLikesPerPost: cleanedProfile.avgLikesPerPost,
+      avgCommentsPerPost: cleanedProfile.avgCommentsPerPost,
       engagementRate,
-      hasLinkInBio: Boolean(profile.externalUrl || profile.linkInBio),
-      usesReels: Boolean(Number(profile.reelsCount || 0) > 0),
-      hasHighlights: Boolean(Number(profile.highlightsCount || 0) > 0),
-      isVerifiedAccount: Boolean(profile.verified),
-      profileUrl: username ? `https://instagram.com/${username}` : null,
+      hasLinkInBio: cleanedProfile.hasLinkInBio,
+      usesReels: cleanedProfile.usesReels,
+      hasHighlights: cleanedProfile.hasHighlights,
+      isVerifiedAccount: cleanedProfile.isVerifiedAccount,
+      profileUrl: cleanedProfile.profileUrl,
       gaps: {
         noInstagram: false,
         deadAccount:
@@ -163,14 +153,12 @@ async function findInstagramProfile(
         lowEngagement:
           engagementRate !== null &&
           engagementRate < PIPELINE_CONFIG.filters.minEngagementRateForHealthy,
-        noLinkInBio: !profile.externalUrl && !profile.linkInBio,
-        noReels: !profile.reelsCount || Number(profile.reelsCount) === 0,
+        noLinkInBio: !cleanedProfile.hasLinkInBio,
+        noReels: !cleanedProfile.usesReels,
         infrequentPosting: postsPerWeek !== null && postsPerWeek < 2,
         lowFollowers: followers < 500,
       },
     };
-
-    return instagramData;
   } catch {
     return createSimulatedInstagramData(business);
   }

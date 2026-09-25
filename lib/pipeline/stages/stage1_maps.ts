@@ -1,6 +1,7 @@
 import { ApifyClient } from "apify-client";
 import { PIPELINE_CONFIG } from "../config";
 import { findRealBusinessesWithGemini } from "@/lib/gemini-leads";
+import { processMapsData } from "../dataQuality";
 
 const token = process.env.APIFY_API_TOKEN || process.env.APIFY_TOKEN;
 const client = token ? new ApifyClient({ token }) : null;
@@ -68,48 +69,16 @@ export async function scrapeGoogleMaps(
         const { items } = await client.dataset(run.defaultDatasetId).listItems();
 
         if (items && items.length > 0) {
-          onProgress?.(`Found ${items.length} businesses on Google Maps`);
+          onProgress?.(`Found ${items.length} raw results on Google Maps. Processing data quality...`);
 
-          return items.map((item: Record<string, unknown>): MapsResult => {
-            const reviews = Array.isArray(item.reviews)
-              ? (item.reviews as Array<Record<string, unknown>>)
-              : [];
-            const unansweredNegative = reviews.filter(
-              (r) => Number(r.stars || r.rating || 0) <= 2 && !r.responseFromOwnerText
-            ).length;
+          const { businesses, report } = processMapsData(items as Array<Record<string, unknown>>);
 
-            return {
-              placeId: String(item.placeId || item.id || `place_${Math.random().toString(36).slice(2, 9)}`),
-              name: String(item.title || item.name || "Local Business"),
-              category: String(item.categoryName || item.category || "Business"),
-              address: String(item.address || item.street || searchQuery),
-              city: String(item.city || ""),
-              country: String(item.countryCode || ""),
-              rating: typeof item.totalScore === "number" ? item.totalScore : (typeof item.rating === "number" ? item.rating : null),
-              reviewCount: Number(item.reviewsCount || item.reviewCount || 0),
-              website: item.website ? String(item.website) : null,
-              phone: item.phone ? String(item.phone) : (item.phoneUnformatted ? String(item.phoneUnformatted) : null),
-              photoCount: Number(item.photosCount || item.imageCount || 0),
-              hasHours: Boolean(item.openingHours || item.hours),
-              isVerified: Boolean(item.isVerified),
-              mapsUrl: String(item.url || item.googleMapsUrl || `https://maps.google.com/?q=${encodeURIComponent(searchQuery)}`),
-              coordinates:
-                item.location && typeof item.location === "object"
-                  ? {
-                      lat: Number((item.location as { lat?: number }).lat || 0),
-                      lng: Number((item.location as { lng?: number }).lng || 0),
-                    }
-                  : null,
-              reviews: reviews.slice(0, 5).map((r) => ({
-                text: String(r.text || ""),
-                rating: Number(r.stars || r.rating || 0),
-                hasOwnerResponse: Boolean(r.responseFromOwnerText),
-              })),
-              unansweredNegativeReviews: unansweredNegative,
-              priceLevel: item.priceLevel ? String(item.priceLevel) : null,
-              openNow: item.temporarilyClosed ? false : null,
-            };
-          });
+          console.log("Maps data quality report:", report);
+
+          if (businesses.length > 0) {
+            onProgress?.(`Validated ${businesses.length} high-quality businesses`);
+            return businesses;
+          }
         }
       } catch (error) {
         console.log(`Maps attempt ${attempt} failed:`, error);

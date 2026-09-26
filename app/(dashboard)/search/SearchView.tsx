@@ -14,12 +14,15 @@ import {
   AlertCircle,
   Sliders,
   PlusCircle,
+  Bot,
+  Filter,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
   BUSINESS_CATEGORIES,
   FREELANCER_TYPE_LABELS,
   type FreelancerType,
+  type CustomClientFilter,
 } from "@/types";
 import { calculateSearchCost } from "@/lib/credit-calc";
 import { saveLocalLeads, saveLocalSearch, deductLocalCredits, getLocalBalance } from "@/lib/local-store";
@@ -28,6 +31,7 @@ import {
   buildSearchLocationString,
   ALL_COUNTRIES,
 } from "@/components/search/LocationFilter";
+import { CustomClientFilterAgent } from "@/components/search/CustomClientFilterAgent";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
@@ -52,6 +56,9 @@ export function SearchView({
 }: SearchViewProps) {
   const router = useRouter();
 
+  // Search Mode: "custom_agent" vs "standard"
+  const [searchMode, setSearchMode] = useState<"custom_agent" | "standard">("custom_agent");
+
   const [freelancerType, setFreelancerType] = useState<FreelancerType>(initialFreelancerType);
   const [businessCategory, setBusinessCategory] = useState<string>(BUSINESS_CATEGORIES[0]);
   
@@ -72,6 +79,7 @@ export function SearchView({
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [progressPercent, setProgressPercent] = useState(10);
   const [error, setError] = useState<string | null>(null);
+  const [activeCustomFilter, setActiveCustomFilter] = useState<CustomClientFilter | null>(null);
 
   // Sync live credits from server and local storage
   useEffect(() => {
@@ -139,11 +147,17 @@ export function SearchView({
     }
   }
 
-  async function handleStartSearch(e: React.FormEvent) {
-    e.preventDefault();
-    const searchTargetLocation = location.trim();
+  async function handleExecuteSearch(customFilter?: CustomClientFilter) {
+    const searchTargetLocation = (customFilter?.targetLocation?.rawLocation || location).trim();
+    const searchCategory = customFilter?.primaryCategory || businessCategory;
+    const searchFreelancerType = customFilter?.freelancerType || freelancerType;
+    const searchCountry = customFilter?.targetLocation?.country || country;
+    const searchCountryCode = customFilter?.targetLocation?.countryCode || countryCode;
+    const searchCity = customFilter?.targetLocation?.city || city;
+    const searchPlace = customFilter?.targetLocation?.place || place;
+
     if (!searchTargetLocation) {
-      toast.error("Please select a country and city/area");
+      toast.error("Please select or describe a target location");
       return;
     }
 
@@ -156,6 +170,7 @@ export function SearchView({
     }
 
     setError(null);
+    setActiveCustomFilter(customFilter || null);
     setIsSearching(true);
     setCurrentStepIndex(0);
     setProgressPercent(15);
@@ -178,13 +193,14 @@ export function SearchView({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           location: searchTargetLocation,
-          businessCategory,
-          freelancerType,
+          businessCategory: searchCategory,
+          freelancerType: searchFreelancerType,
           resultCount,
-          country,
-          countryCode,
-          city,
-          place,
+          country: searchCountry,
+          countryCode: searchCountryCode,
+          city: searchCity,
+          place: searchPlace,
+          customFilter: customFilter || undefined,
         }),
       });
 
@@ -204,14 +220,14 @@ export function SearchView({
       }
       deductLocalCredits(
         cost.totalCredits,
-        `Search for ${businessCategory} in ${searchTargetLocation} (${resultCount} results)`,
+        `Search for ${customFilter?.nicheFocus || searchCategory} in ${searchTargetLocation} (${resultCount} results)`,
         data.searchId
       );
 
       // Finish progress animation
       setProgressPercent(100);
       setCurrentStepIndex(PROGRESS_STEPS.length - 1);
-      toast.success(`Discovered ${data.resultsCount || resultCount} qualified leads!`);
+      toast.success(`Discovered ${data.resultsCount || resultCount} qualified leads matching criteria!`);
 
       if (typeof data.newBalance === "number") {
         setAvailableCredits(data.newBalance);
@@ -232,6 +248,11 @@ export function SearchView({
     }
   }
 
+  async function handleStartStandardSearch(e: React.FormEvent) {
+    e.preventDefault();
+    await handleExecuteSearch();
+  }
+
   if (isSearching) {
     return (
       <div className="max-w-2xl mx-auto py-12 px-4">
@@ -244,10 +265,12 @@ export function SearchView({
 
           <div>
             <h2 className="text-xl font-semibold text-neutral-900">
-              Scouting {businessCategory}s in {location}
+              Scouting {activeCustomFilter?.nicheFocus || businessCategory}s in {activeCustomFilter?.targetLocation?.rawLocation || location}
             </h2>
             <p className="mt-1 text-sm text-neutral-500">
-              Gathering Google Maps metrics, auditing Instagram activity, and building personalized pitches...
+              {activeCustomFilter
+                ? `Agent filter active: Prioritizing ${activeCustomFilter.digitalGapPriorities.slice(0, 2).join(" & ")}...`
+                : "Gathering Google Maps metrics, auditing Instagram activity, and building personalized pitches..."}
             </p>
           </div>
 
@@ -301,20 +324,131 @@ export function SearchView({
   }
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8 pb-12">
+    <div className="max-w-4xl mx-auto space-y-6 pb-12">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-medium tracking-tight text-neutral-900">New Prospect Search</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Find local businesses with digital gaps, score the opportunity, and generate personalized outreach pitches.
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-medium tracking-tight text-neutral-900">Prospect Search</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Find local businesses with digital gaps, score the opportunity, and generate personalized outreach pitches.
+          </p>
+        </div>
+
+        {/* Search Mode Toggle Tabs */}
+        <div className="flex items-center gap-1.5 p-1 bg-neutral-100 rounded-xl border border-neutral-200/80 self-start sm:self-auto">
+          <button
+            type="button"
+            onClick={() => setSearchMode("custom_agent")}
+            className={cn(
+              "flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer",
+              searchMode === "custom_agent"
+                ? "bg-white text-primary shadow-xs"
+                : "text-neutral-600 hover:text-neutral-900 hover:bg-white/50"
+            )}
+          >
+            <Bot className="h-3.5 w-3.5 text-primary" />
+            <span>AI Custom Filter Agent</span>
+            <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.2 bg-primary/10 text-primary rounded-full font-bold">
+              New
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setSearchMode("standard")}
+            className={cn(
+              "flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer",
+              searchMode === "standard"
+                ? "bg-white text-neutral-900 shadow-xs"
+                : "text-neutral-600 hover:text-neutral-900 hover:bg-white/50"
+            )}
+          >
+            <Filter className="h-3.5 w-3.5 text-neutral-500" />
+            <span>Standard Filters</span>
+          </button>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        {/* Form Column */}
-        <div className="lg:col-span-7">
-          <Card className="border border-neutral-200/80 shadow-sm p-6">
-            <form onSubmit={handleStartSearch} className="space-y-6">
+      {searchMode === "custom_agent" ? (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          <div className="lg:col-span-8">
+            <CustomClientFilterAgent
+              currentFreelancerType={freelancerType}
+              currentCountry={country}
+              currentCity={city}
+              currentPlace={place}
+              resultCount={resultCount}
+              onResultCountChange={setResultCount}
+              onContinueToSearch={handleExecuteSearch}
+              disabled={isSearching}
+            />
+          </div>
+
+          {/* Right Cost & Balance Card */}
+          <div className="lg:col-span-4 space-y-6">
+            <Card className="border border-neutral-200/80 shadow-sm p-5 space-y-4 bg-white">
+              <div className="flex items-center justify-between border-b border-neutral-100 pb-3">
+                <span className="text-xs font-semibold uppercase tracking-wider text-neutral-500 flex items-center gap-1.5">
+                  <Coins className="h-3.5 w-3.5 text-amber-500" />
+                  Your Wallet
+                </span>
+                <span className="text-sm font-bold text-neutral-900">
+                  {availableCredits} credits
+                </span>
+              </div>
+
+              <div className="space-y-2 text-xs text-neutral-600">
+                <div className="flex justify-between">
+                  <span>Target Results:</span>
+                  <span className="font-semibold text-neutral-900">{resultCount} leads</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Search Cost:</span>
+                  <span className="font-semibold text-primary">{cost.totalCredits} credits</span>
+                </div>
+                <div className="flex justify-between pt-1 border-t border-neutral-100 font-semibold text-neutral-900">
+                  <span>Remaining after search:</span>
+                  <span className={availableCredits - cost.totalCredits < 0 ? "text-red-600" : "text-emerald-600"}>
+                    {availableCredits - cost.totalCredits} credits
+                  </span>
+                </div>
+              </div>
+
+              {availableCredits < cost.totalCredits && (
+                <div className="pt-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleClaimRefill}
+                    disabled={isRefilling}
+                    className="w-full text-xs h-9 border-amber-300 text-amber-900 bg-amber-50/60 hover:bg-amber-100/60 font-medium gap-1.5"
+                  >
+                    {isRefilling ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <PlusCircle className="h-3.5 w-3.5 text-amber-600" />}
+                    Claim 50 Free Test Credits
+                  </Button>
+                </div>
+              )}
+            </Card>
+
+            <Card className="border border-neutral-200/80 shadow-sm p-5 space-y-3 bg-neutral-50/70">
+              <span className="text-xs font-semibold uppercase tracking-wider text-neutral-700 flex items-center gap-1.5">
+                <Sparkles className="h-3.5 w-3.5 text-primary" />
+                How Custom Agent Filter Works
+              </span>
+              <ol className="space-y-2 text-xs text-neutral-600 list-decimal list-inside leading-relaxed">
+                <li><strong className="text-neutral-800">Describe:</strong> Enter your exact target client persona, desired digital gaps, and budget goals.</li>
+                <li><strong className="text-neutral-800">Understand:</strong> AI Agent breaks down your brief into structured scouting parameters & pitch angles.</li>
+                <li><strong className="text-neutral-800">Scout & Filter:</strong> The pipeline searches and ranks leads matching your exact custom criteria.</li>
+              </ol>
+            </Card>
+          </div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          {/* Form Column */}
+          <div className="lg:col-span-7">
+            <Card className="border border-neutral-200/80 shadow-sm p-6">
+              <form onSubmit={handleStartStandardSearch} className="space-y-6">
               {/* Freelancer Type */}
               <div className="space-y-2">
                 <label className="text-xs font-semibold uppercase tracking-wider text-neutral-600 flex items-center gap-1.5">
@@ -562,6 +696,7 @@ export function SearchView({
           </Card>
         </div>
       </div>
-    </div>
-  );
+    )}
+  </div>
+);
 }

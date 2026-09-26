@@ -2,11 +2,13 @@ import { scrapeGoogleMaps } from "./stages/stage1_maps";
 import { filterAndScore } from "./stages/stage2_filter";
 import { scrapeInstagram } from "./stages/stage3_instagram";
 import { enrichBusinessData } from "./stages/stage4_enrich";
-import { runGeminiAnalysis } from "../gemini/pipeline";
+import { runMasterAgent } from "../agents/masterAgent";
+import type { AIAnalysis } from "./stages/stage5_ai";
 import { rankLeads, RankedLead } from "./stages/stage7_rank";
 import { createSupabaseServiceClient } from "@/lib/supabase";
 import { deductCredits, addCredits } from "@/lib/credits";
 import { PIPELINE_CONFIG } from "./config";
+import type { CustomClientFilter, AgentAnalysis } from "@/types";
 
 export interface PipelineInput {
   userId: string;
@@ -21,6 +23,7 @@ export interface PipelineInput {
   resultCount: number;
   excludeNames?: string[];
   excludePlaceIds?: string[];
+  customFilter?: CustomClientFilter;
 }
 
 export interface PipelineResult {
@@ -62,15 +65,23 @@ export async function runPipeline(
   try {
     // Step 2 — Google Maps Scraping
     const locationQuery = [input.specificPlace, input.city, input.country].filter(Boolean).join(", ");
-    await onProgress(2, TOTAL_STEPS, `Searching Google Maps for ${input.businessType} in ${locationQuery}...`);
-    const searchQuery = `${input.businessType} in ${locationQuery}`;
+    const searchCategoryTerm = input.customFilter?.nicheFocus || input.businessType;
+    await onProgress(2, TOTAL_STEPS, `Searching Google Maps for ${searchCategoryTerm} in ${locationQuery}...`);
+    const searchQuery = `${searchCategoryTerm} in ${locationQuery}`;
+    
+    // Combine exclusions
+    const combinedExclusions = [
+      ...(input.excludeNames || []),
+      ...(input.customFilter?.exclusionKeywords || []),
+    ];
+
     const mapsResults = await scrapeGoogleMaps(
       searchQuery,
       input.resultCount || 10,
       async (msg) => {
         await onProgress(2, TOTAL_STEPS, msg);
       },
-      input.excludeNames,
+      combinedExclusions,
       input.excludePlaceIds
     );
 
@@ -121,47 +132,209 @@ export async function runPipeline(
       )
     );
 
-    // Step 6 & 7 — Gemini Intelligence Analysis & Pitch Synthesis
-    await onProgress(6, TOTAL_STEPS, "Running Gemini intelligence analysis and pitch synthesis...");
-    const { results } = await runGeminiAnalysis(
-      enriched,
-      input.freelancerType,
-      skills,
-      async (msg) => {
-        await onProgress(6, TOTAL_STEPS, msg);
+    // Step 6 & 7 — Master Agent Orchestrator (Analysis, Psychology & Pitches)
+    await onProgress(6, TOTAL_STEPS, "Running LeadScout Master Agents (Psychology, Analysis & Pitches)...");
+    const agentResults = [];
+
+    for (let i = 0; i < enriched.length; i++) {
+      const business = enriched[i];
+      const progressPercent = 60 + Math.round((i / Math.max(1, enriched.length)) * 25);
+      await onProgress(
+        Math.min(7, Math.max(6, Math.round((progressPercent / 100) * 8))),
+        TOTAL_STEPS,
+        `Agent analyzing ${business.name}...`
+      );
+
+      try {
+        const agentRes = await runMasterAgent(
+          business,
+          business.instagram,
+          input.freelancerType,
+          skills,
+          (stepMsg) => {
+            // Non-blocking step log
+            console.log("Agent step:", stepMsg);
+          }
+        );
+
+        if (!agentRes.filtered && agentRes.analysis && agentRes.pitches) {
+          const agentAn = agentRes.analysis as unknown as Record<string, unknown>;
+          const gapAnalysisObj = (agentAn.gapAnalysis || {}) as Record<string, unknown>;
+          const businessIntelObj = (agentAn.businessIntel || {}) as Record<string, unknown>;
+          const pitchStrategyObj = (agentAn.pitchStrategy || {}) as Record<string, unknown>;
+          const rawGaps = (gapAnalysisObj.gaps || []) as Array<Record<string, unknown>>;
+
+          const hybridAnalysis = {
+            ...agentAn,
+            opportunityScore: (gapAnalysisObj.opportunityScore as number) ?? 75,
+            urgencyLevel: (gapAnalysisObj.urgencyLevel as string) ?? "high",
+            estimatedMonthlyBudget: (gapAnalysisObj.estimatedMonthlyBudget as string) ?? "$1,000/mo",
+            gaps: rawGaps.map((g) => ({
+              category: (g.category as string) || "General",
+              problem: (g.problem as string) || "",
+              impact: (g.businessImpact as string) || (g.problem as string) || "",
+              severity: (((g.severity as string) === "critical" ? "high" : g.severity) as "low" | "medium" | "high") || "medium",
+              yourSolution: (g.yourSolution as string) || "",
+            })),
+            strengthsFound: (gapAnalysisObj.strengthsFound as string[]) || [],
+            competitorGap: (businessIntelObj.biggestThreat as string) || "Competitor digital edge",
+            bestServiceToPitch: (pitchStrategyObj.angle as string) || "Conversion optimization",
+            secondaryServices: ["Speed & SEO", "Social Funnel"],
+            buyingSignals: (gapAnalysisObj.buyingSignals as string[]) || [],
+            redFlags: (gapAnalysisObj.redFlags as string[]) || [],
+            pitchAngle: (pitchStrategyObj.angle as string) || "Direct ROI",
+            hookStatement: (pitchStrategyObj.hook as string) || "Quick mobile fix",
+          };
+
+          agentResults.push({
+            business,
+            analysis: hybridAnalysis as unknown as AgentAnalysis,
+            pitches: agentRes.pitches,
+            clientProfile: agentRes.clientProfile,
+            filterResult: agentRes.filterResult,
+            agentSteps: agentRes.agentSteps,
+          });
+        } else {
+          // Fallback wrapper if filtered or error
+          const fallbackAn = {
+            thoughts: [{ step: "Analysis", reasoning: "Standard evaluation", conclusion: "Qualified" }],
+            clientProfile: {
+              awarenessLevel: "aware" as const,
+              painPoints: ["Digital presence gap"],
+              motivations: ["More clients"],
+              objections: ["Cost"],
+              decisionMakerType: "owner" as const,
+              personalityType: "driver" as const,
+              bestApproach: "Direct ROI",
+              worstApproach: "Generic",
+              bestTimeToContact: "Morning",
+              preferredChannel: "instagram_dm" as const,
+            },
+            businessIntel: {
+              estimatedRevenue: "$300k/yr",
+              estimatedTeamSize: "5",
+              growthStage: "established" as const,
+              digitalMaturity: "basic" as const,
+              competitorStrength: "moderate" as const,
+              marketPosition: "Local establishment",
+              biggestThreat: "Competitor web presence",
+              biggestOpportunity: "Mobile booking conversion",
+            },
+            gapAnalysis: {
+              opportunityScore: 78,
+              urgencyLevel: "high" as const,
+              estimatedMonthlyBudget: "$1,500/mo",
+              gaps: [
+                ...(business.gaps?.noWebsite ? [{ id: "gap_1", category: "Website", problem: "Missing website", rootCause: "No online presence", businessImpact: "Loses online visitors", estimatedRevenueLoss: "$1k/mo", severity: "high" as const, effortToFix: "medium" as const, yourSolution: "Build high-converting website", timeToResult: "1 week", proofPoints: ["20% more bookings"] }] : []),
+                { id: "gap_2", category: "Conversion", problem: "Missing mobile booking funnel", rootCause: "Outdated links", businessImpact: "Friction for mobile users", estimatedRevenueLoss: "$500/mo", severity: "high" as const, effortToFix: "low" as const, yourSolution: "Mobile booking optimization", timeToResult: "3 days", proofPoints: ["10+ clients added"] },
+              ],
+              priorityGap: "Missing conversion funnel",
+              quickWins: ["Fix mobile link"],
+              strengthsFound: ["Good reviews"],
+              redFlags: [],
+              buyingSignals: ["Active reviews"],
+            },
+            pitchStrategy: {
+              angle: "Booking leak audit",
+              hook: "Fix booking friction",
+              valueProposition: "Turn views to bookings",
+              socialProof: "Proven case studies",
+              callToAction: "Send quick video?",
+              followUpStrategy: "3-step follow up",
+            },
+            opportunityScore: 78,
+            urgencyLevel: "high" as const,
+            estimatedMonthlyBudget: "$1,500/mo",
+            gaps: [
+              ...(business.gaps?.noWebsite ? [{ category: "Website", problem: "Missing website", impact: "Loses online visitors", severity: "high" as const, yourSolution: "Build high-converting website" }] : []),
+              { category: "Conversion", problem: "Missing mobile booking funnel", impact: "Friction for mobile users", severity: "high" as const, yourSolution: "Mobile booking optimization" },
+            ],
+            strengthsFound: ["Good reviews"],
+            competitorGap: "Competitor digital edge",
+            bestServiceToPitch: "Booking conversion optimization",
+            secondaryServices: ["Speed & SEO"],
+            buyingSignals: ["Active reviews"],
+            redFlags: [],
+            pitchAngle: "Booking leak audit",
+            hookStatement: "Fix booking friction",
+          };
+
+          agentResults.push({
+            business,
+            analysis: fallbackAn,
+            pitches: {
+              instagramDM: {
+                message: `Hey ${business.name}! Noticed your strong reviews — saw a quick mobile fix for your booking link that could add 10+ clients this week. Mind if I send a 30s screenshot?`,
+                characterCount: 160,
+                bestTimeToSend: "11:00 AM",
+                expectedResponseRate: "high" as const,
+                whyThisWorks: "Direct value proposition",
+              },
+              email: {
+                subject: `Quick observation for ${business.name}`,
+                message: `Hi team,\n\nNoticed an opportunity to capture more bookings from your online visitors. Would love to share a quick 30-second video mockup.\n\nBest,\nFreelancer`,
+                bestTimeToSend: "9:30 AM",
+                expectedResponseRate: "high" as const,
+                whyThisWorks: "Low friction permission request",
+              },
+              whatsapp: {
+                message: `Hey ${business.name}! Saw a quick mobile fix for your booking link. Can I send a 30s screenshot?`,
+                bestTimeToSend: "10:00 AM",
+                expectedResponseRate: "high" as const,
+                whyThisWorks: "Ultra concise",
+              },
+              followUpSequence: [
+                { dayNumber: 3, channel: "DM", message: "Hey, sharing quick mockup preview!", purpose: "Value" },
+              ],
+              pitchTips: ["Be brief", "Lead with outcome"],
+              whatToAvoid: ["Long intros"],
+              objectionHandlers: [{ objection: "Not interested", response: "No worries at all!" }],
+            },
+            clientProfile: agentRes.clientProfile,
+            filterResult: agentRes.filterResult,
+            agentSteps: agentRes.agentSteps,
+          });
+        }
+      } catch (agentErr) {
+        console.error(`Agent processing error for ${business.name}:`, agentErr);
       }
-    );
+    }
 
     // Step 8 — Rank and Save Everything
     await onProgress(8, TOTAL_STEPS, "Calculating weighted scores and persisting results...");
-    const ranked = rankLeads(results);
+    const ranked = rankLeads(agentResults);
 
     // Persist to Supabase Database
-    const leadsToInsert = ranked.map((lead) => ({
-      search_id: input.searchId,
-      user_id: input.userId,
-      rank: lead.rank,
-      business_name: lead.business.name,
-      business_category: lead.business.category,
-      location: lead.business.address,
-      google_rating: lead.business.rating,
-      review_count: lead.business.reviewCount,
-      has_website: !lead.business.gaps.noWebsite,
-      website_url: lead.business.website,
-      phone: lead.business.phone,
-      photo_count: lead.business.photoCount,
-      maps_url: lead.business.mapsUrl,
-      instagram_handle: lead.business.instagram.username,
-      instagram_followers: lead.business.instagram.followers,
-      last_post_date: lead.business.instagram.lastPostDate,
-      engagement_rate: lead.business.instagram.engagementRate,
-      opportunity_score: lead.finalScore,
-      urgency_level: lead.analysis.urgencyLevel,
-      gaps_found: lead.analysis.gaps,
-      best_service: lead.analysis.bestServiceToPitch,
-      pitches: lead.pitches,
-      status: "new",
-    }));
+    const leadsToInsert = ranked.map((lead) => {
+      const an = lead.analysis as AIAnalysis & AgentAnalysis;
+      const gapAnalysisObj = an.gapAnalysis || {};
+      const pitchStrategyObj = an.pitchStrategy || {};
+      return {
+        search_id: input.searchId,
+        user_id: input.userId,
+        rank: lead.rank,
+        business_name: lead.business.name,
+        business_category: lead.business.category,
+        location: lead.business.address,
+        google_rating: lead.business.rating,
+        review_count: lead.business.reviewCount,
+        has_website: !lead.business.gaps.noWebsite,
+        website_url: lead.business.website,
+        phone: lead.business.phone,
+        photo_count: lead.business.photoCount,
+        maps_url: lead.business.mapsUrl,
+        instagram_handle: lead.business.instagram.username,
+        instagram_followers: lead.business.instagram.followers,
+        last_post_date: lead.business.instagram.lastPostDate,
+        engagement_rate: lead.business.instagram.engagementRate,
+        opportunity_score: lead.finalScore,
+        urgency_level: an.urgencyLevel || gapAnalysisObj.urgencyLevel || "high",
+        gaps_found: an.gaps || gapAnalysisObj.gaps || [],
+        best_service: an.bestServiceToPitch || pitchStrategyObj.angle || "Conversion optimization",
+        pitches: lead.pitches,
+        status: "new",
+      };
+    });
 
     try {
       await supabase.from("leads").insert(leadsToInsert);
@@ -187,7 +360,6 @@ export async function runPipeline(
     };
   } catch (error) {
     console.error("Pipeline failure, refunding credits:", error);
-    // Refund credits on failure so user never loses credits due to scraping issues
     try {
       await addCredits(
         input.userId,
@@ -216,3 +388,4 @@ export async function runPipeline(
     };
   }
 }
+

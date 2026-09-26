@@ -46,6 +46,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { getLocalLeadById, updateLocalLead } from "@/lib/local-store";
 import { OutreachTemplateModal } from "@/components/leads/OutreachTemplateModal";
+import { FullAnalysis } from "@/components/leads/FullAnalysis";
 
 interface LeadDetailViewProps {
   initialLead: Record<string, unknown>;
@@ -768,6 +769,15 @@ export function LeadDetailView({ initialLead }: LeadDetailViewProps) {
           </div>
         )}
       </Card>
+
+      {/* Master Agent Full Analysis & Psychology Suite */}
+      <div className="space-y-4">
+        <div className="flex items-center gap-2">
+          <Sparkles className="h-5 w-5 text-primary" />
+          <h2 className="text-lg font-bold text-neutral-900">LeadScout Master Agent Intelligence Suite</h2>
+        </div>
+        <FullAnalysis lead={lead} />
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Left Column: Personalized Outreach Pitches */}

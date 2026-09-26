@@ -1,4 +1,4 @@
-import type { CreditBalance, CreditTransaction, Lead } from "@/types";
+import type { CreditBalance, CreditTransaction, Lead, LeadFolder } from "@/types";
 
 export interface StoredSearch {
   id: string;
@@ -19,9 +19,41 @@ interface MockStorage {
   transactions: CreditTransaction[];
   searches: StoredSearch[];
   leads: Lead[];
+  folders: LeadFolder[];
 }
 
 const STORAGE_KEY = "freelancefind_local_db_v1";
+
+const DEFAULT_FOLDERS: LeadFolder[] = [
+  {
+    id: "folder_hot_deals",
+    name: "🔥 Hot Prospects",
+    color: "#f43f5e", // Rose
+    description: "Urgent digital gaps ready for immediate pitch",
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: "folder_follow_ups",
+    name: "⏳ Follow-up Pipeline",
+    color: "#8b5cf6", // Purple
+    description: "Sent initial outreach, awaiting reply",
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: "folder_high_budget",
+    name: "💎 High Budget Clients",
+    color: "#06b6d4", // Cyan
+    description: "Established businesses with $2k+ monthly budget signal",
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: "folder_closed_won",
+    name: "🏆 Closed / Won",
+    color: "#10b981", // Emerald
+    description: "Converted client projects",
+    createdAt: new Date().toISOString(),
+  },
+];
 
 const DEFAULT_STATE: MockStorage = {
   balance: {
@@ -44,6 +76,7 @@ const DEFAULT_STATE: MockStorage = {
   ],
   searches: [],
   leads: [],
+  folders: DEFAULT_FOLDERS,
 };
 
 // In-memory fallback for SSR or when window is not present
@@ -54,7 +87,11 @@ function getStore(): MockStorage {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
-        return JSON.parse(raw);
+        const parsed = JSON.parse(raw);
+        if (!parsed.folders || !Array.isArray(parsed.folders) || parsed.folders.length === 0) {
+          parsed.folders = DEFAULT_FOLDERS;
+        }
+        return parsed;
       }
     } catch {
       // Ignore localStorage errors
@@ -169,6 +206,118 @@ export function saveLocalSearch(search: StoredSearch) {
   const store = getStore();
   store.searches.unshift(search);
   saveStore(store);
+}
+
+export function getLocalFolders(): LeadFolder[] {
+  const store = getStore();
+  if (!store.folders || store.folders.length === 0) {
+    store.folders = DEFAULT_FOLDERS;
+    saveStore(store);
+  }
+  return store.folders;
+}
+
+export function createLocalFolder(name: string, color = "#6366f1", description = ""): LeadFolder {
+  const store = getStore();
+  const newFolder: LeadFolder = {
+    id: `folder_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+    name: name.trim(),
+    color,
+    description: description.trim(),
+    createdAt: new Date().toISOString(),
+  };
+
+  store.folders = [...(store.folders || []), newFolder];
+  saveStore(store);
+  return newFolder;
+}
+
+export function updateLocalFolder(id: string, updates: Partial<LeadFolder>): LeadFolder | null {
+  const store = getStore();
+  const index = (store.folders || []).findIndex((f) => f.id === id);
+  if (index === -1) return null;
+
+  store.folders[index] = {
+    ...store.folders[index],
+    ...updates,
+  };
+  saveStore(store);
+  return store.folders[index];
+}
+
+export function deleteLocalFolder(id: string): void {
+  const store = getStore();
+  // Unassign leads in this folder
+  store.leads = store.leads.map((lead) => {
+    if (lead.folderId === id) {
+      return { ...lead, folderId: null, folderName: null };
+    }
+    return lead;
+  });
+
+  store.folders = (store.folders || []).filter((f) => f.id !== id);
+  saveStore(store);
+}
+
+export function assignLeadToFolder(leadId: string, folderId: string | null): Lead | null {
+  const store = getStore();
+  const index = store.leads.findIndex((l) => l.id === leadId);
+  if (index === -1) return null;
+
+  const folder = folderId ? (store.folders || []).find((f) => f.id === folderId) : null;
+
+  store.leads[index] = {
+    ...store.leads[index],
+    folderId: folderId || null,
+    folderName: folder ? folder.name : null,
+  };
+
+  saveStore(store);
+  return store.leads[index];
+}
+
+export function assignLeadsToFolderBulk(leadIds: string[], folderId: string | null): void {
+  const store = getStore();
+  const idSet = new Set(leadIds);
+  const folder = folderId ? (store.folders || []).find((f) => f.id === folderId) : null;
+
+  store.leads = store.leads.map((lead) => {
+    if (idSet.has(lead.id)) {
+      return {
+        ...lead,
+        folderId: folderId || null,
+        folderName: folder ? folder.name : null,
+      };
+    }
+    return lead;
+  });
+
+  saveStore(store);
+}
+
+export function deleteLocalLead(id: string): void {
+  const store = getStore();
+  store.leads = store.leads.filter((l) => l.id !== id);
+  saveStore(store);
+}
+
+export function deleteLocalLeadsBulk(ids: string[]): void {
+  const store = getStore();
+  const idSet = new Set(ids);
+  store.leads = store.leads.filter((l) => !idSet.has(l.id));
+  saveStore(store);
+}
+
+export function getDiscoveredBusinessFingerprints(): { names: string[]; phoneNumbers: string[] } {
+  const store = getStore();
+  const names = store.leads
+    .map((l) => (l.businessName || "").trim().toLowerCase())
+    .filter(Boolean);
+  const phoneNumbers = store.leads
+    .map((l) => (l.phone || "").replace(/[^0-9]/g, ""))
+    .filter((p) => p.length > 5);
+
+  return { names, phoneNumbers };
 }
 
 export function getLocalLeads(): Lead[] {

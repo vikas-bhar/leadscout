@@ -31,6 +31,7 @@ export async function findRealBusinessesWithGemini({
   place,
   city,
   country,
+  excludeBusinesses,
 }: {
   searchId: string;
   userId: string;
@@ -41,6 +42,7 @@ export async function findRealBusinessesWithGemini({
   place?: string;
   city?: string;
   country?: string;
+  excludeBusinesses?: string[];
 }): Promise<Lead[] | null> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return null;
@@ -51,6 +53,10 @@ export async function findRealBusinessesWithGemini({
     const targetCity = city || location.split(",")[0] || "Dubai";
     const targetCountry = country || "UAE";
     const targetArea = place ? `${place}, ` : "";
+    const exclusionsText =
+      excludeBusinesses && excludeBusinesses.length > 0
+        ? `\n8. EXCLUSION REQUIREMENT: Do NOT include any of the following businesses which have already been discovered: ${excludeBusinesses.slice(0, 15).join(", ")}. Find NEW, DIFFERENT businesses.`
+        : "";
 
     const prompt = `You are an expert local business directory intelligence analyst.
 Find ${Math.min(count, 12)} REAL, ACTUAL, CURRENTLY REGISTERED AND OPERATING businesses for the category "${businessCategory}" in ${targetArea}${targetCity}, ${targetCountry}.
@@ -62,7 +68,7 @@ CRITICAL ACCURACY RULES:
 4. If they have a real website, provide it. If not, set hasWebsite to false and websiteUrl to null.
 5. If they have an active verified Instagram handle, provide it without fictional characters. If unknown, set instagramHandle to null.
 6. Provide their realistic Google Maps rating (between 3.9 and 4.9) and review count.
-7. Identify 2 concrete digital weaknesses/opportunities where a freelance ${freelancerType.replace("_", " ")} can help them get more customer bookings.
+7. Identify 2 concrete digital weaknesses/opportunities where a freelance ${freelancerType.replace("_", " ")} can help them get more customer bookings.${exclusionsText}
 
 Respond with JSON format matching:
 {

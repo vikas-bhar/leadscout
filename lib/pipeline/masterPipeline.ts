@@ -19,6 +19,8 @@ export interface PipelineInput {
   city: string;
   specificPlace?: string;
   resultCount: number;
+  excludeNames?: string[];
+  excludePlaceIds?: string[];
 }
 
 export interface PipelineResult {
@@ -62,7 +64,15 @@ export async function runPipeline(
     const locationQuery = [input.specificPlace, input.city, input.country].filter(Boolean).join(", ");
     await onProgress(2, TOTAL_STEPS, `Searching Google Maps for ${input.businessType} in ${locationQuery}...`);
     const searchQuery = `${input.businessType} in ${locationQuery}`;
-    const mapsResults = await scrapeGoogleMaps(searchQuery, input.resultCount || 10);
+    const mapsResults = await scrapeGoogleMaps(
+      searchQuery,
+      input.resultCount || 10,
+      async (msg) => {
+        await onProgress(2, TOTAL_STEPS, msg);
+      },
+      input.excludeNames,
+      input.excludePlaceIds
+    );
 
     // Step 3 — Filter and Score
     await onProgress(3, TOTAL_STEPS, `Found ${mapsResults.length} businesses. Filtering for digital gaps & opportunity...`);

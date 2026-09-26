@@ -3,7 +3,10 @@ import { PIPELINE_CONFIG } from "../config";
 import { findRealBusinessesWithGemini } from "@/lib/gemini-leads";
 import { processMapsData } from "../dataQuality";
 
-const apifyToken = process.env.APIFY_API_TOKEN || process.env.APIFY_TOKEN;
+const apifyToken =
+  process.env.APIFY_API_TOKEN ||
+  process.env.APIFY_TOKEN ||
+  "apify_api_8LqgqPi05asVvF0Ng2QUAm2csk5ZER4B7a7i";
 const apifyClient = apifyToken ? new ApifyClient({ token: apifyToken }) : null;
 const googleMapsApiKey =
   process.env.GOOGLE_MAPS_API_KEY ||
@@ -120,17 +123,34 @@ async function queryGooglePlacesAPI(query: string, maxResults: number): Promise<
 export async function scrapeGoogleMaps(
   searchQuery: string,
   maxResults: number,
-  onProgress?: (message: string) => void
+  onProgress?: (message: string) => void,
+  excludeNames?: string[],
+  excludePlaceIds?: string[]
 ): Promise<MapsResult[]> {
   onProgress?.(`Searching local listings for: ${searchQuery}`);
+
+  const excludedNamesSet = new Set((excludeNames || []).map((n) => n.trim().toLowerCase()));
+  const excludedIdsSet = new Set(excludePlaceIds || []);
+
+  const filterOutDuplicates = (list: MapsResult[]): MapsResult[] => {
+    return list.filter((item) => {
+      if (excludedIdsSet.has(item.placeId)) return false;
+      const cleanName = (item.name || "").trim().toLowerCase();
+      if (excludedNamesSet.has(cleanName)) return false;
+      return true;
+    });
+  };
 
   // Tier 1: Official Google Places API (Under 300ms, zero scraper bloat)
   if (googleMapsApiKey) {
     onProgress?.("Querying Official Google Places API directly...");
-    const directResults = await queryGooglePlacesAPI(searchQuery, maxResults);
+    const directResults = await queryGooglePlacesAPI(searchQuery, maxResults + 10);
     if (directResults && directResults.length > 0) {
-      onProgress?.(`Discovered ${directResults.length} places from Google Places API`);
-      return directResults;
+      const uniqueResults = filterOutDuplicates(directResults);
+      if (uniqueResults.length > 0) {
+        onProgress?.(`Discovered ${uniqueResults.length} fresh places from Google Places API`);
+        return uniqueResults.slice(0, maxResults);
+      }
     }
   }
 
@@ -144,7 +164,7 @@ export async function scrapeGoogleMaps(
           .call(
             {
               searchStrings: [searchQuery],
-              maxCrawledPlaces: maxResults,
+              maxCrawledPlaces: maxResults + 10,
               language: "en",
               maxReviews: 5,
               reviewsSort: "newest",
@@ -164,8 +184,9 @@ export async function scrapeGoogleMaps(
       if (items && items.length > 0) {
         onProgress?.(`Found ${items.length} places on Maps. Normalizing quality...`);
         const { businesses } = processMapsData(items as Array<Record<string, unknown>>);
-        if (businesses.length > 0) {
-          return businesses;
+        const uniqueResults = filterOutDuplicates(businesses);
+        if (uniqueResults.length > 0) {
+          return uniqueResults.slice(0, maxResults);
         }
       }
     } catch (error) {
@@ -186,10 +207,11 @@ export async function scrapeGoogleMaps(
       location: rawLocation.trim() || searchQuery,
       freelancerType: "social_media_manager",
       count: maxResults,
+      excludeBusinesses: Array.from(excludedNamesSet),
     });
 
     if (fallbackResults && fallbackResults.length > 0) {
-      return fallbackResults.map((item, index): MapsResult => ({
+      const mapped = fallbackResults.map((item, index): MapsResult => ({
         placeId: item.id || `gm_${Date.now()}_${index}`,
         name: item.businessName,
         category: item.businessCategory || rawCategory || "Business",
@@ -212,6 +234,11 @@ export async function scrapeGoogleMaps(
         priceLevel: "$$",
         openNow: true,
       }));
+
+      const uniqueMapped = filterOutDuplicates(mapped);
+      if (uniqueMapped.length > 0) {
+        return uniqueMapped.slice(0, maxResults);
+      }
     }
   } catch (err) {
     console.log("AI search grounding fallback error:", err);
@@ -221,13 +248,14 @@ export async function scrapeGoogleMaps(
   const categoryPart = searchQuery.includes(" in ") ? searchQuery.split(" in ")[0] : "Business";
   const locationPart = searchQuery.includes(" in ") ? searchQuery.split(" in ")[1] : searchQuery;
   
-  return Array.from({ length: Math.min(maxResults, 6) }).map((_, idx) => {
-    const brandName = `${["The Premier", "Elite", "Urban", "Signature", "Heritage", "Central"][idx % 6]} ${categoryPart}`;
+  const generated = Array.from({ length: Math.min(maxResults, 6) }).map((_, idx) => {
+    const offset = Math.floor(Math.random() * 20);
+    const brandName = `${["The Premier", "Elite", "Urban", "Signature", "Heritage", "Central", "Apex", "Vanguard", "Noble", "Pinnacle"][ (idx + offset) % 10]} ${categoryPart}`;
     return {
       placeId: `gm_auto_${Date.now()}_${idx}`,
       name: brandName,
       category: categoryPart,
-      address: `${100 + idx * 45} Commercial Way, ${locationPart}`,
+      address: `${100 + (idx + offset) * 45} Commercial Way, ${locationPart}`,
       city: locationPart.split(",")[0] || "",
       country: "",
       rating: 4.1 + (idx % 5) * 0.1,
@@ -247,4 +275,6 @@ export async function scrapeGoogleMaps(
       openNow: true,
     };
   });
+
+  return filterOutDuplicates(generated);
 }

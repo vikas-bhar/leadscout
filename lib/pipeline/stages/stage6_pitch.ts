@@ -11,7 +11,7 @@ const genai = geminiKey ? new GoogleGenAI({ apiKey: geminiKey }) : null;
 
 export interface PitchResult {
   pitches: Array<{
-    style: "instagram_dm" | "email" | "whatsapp";
+    style: "instagram_dm" | "email" | "whatsapp" | "phone_script";
     tone: string;
     subject: string | null;
     message: string;
@@ -19,6 +19,8 @@ export interface PitchResult {
     expectedResponseRate: "low" | "medium" | "high";
   }>;
   followUpMessage: string;
+  secondFollowUpMessage?: string;
+  coldCallScript?: string;
   pitchTips: string[];
 }
 

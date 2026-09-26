@@ -213,6 +213,51 @@ Would you like me to share a 1-page action plan on how to resolve {{primary_gap}
     updatedAt: "2026-09-01T00:00:00.000Z",
   },
   {
+    id: "tpl_creator_reels_pitch",
+    name: "Creator & Influencer Video Hook Pitch",
+    channel: "instagram_dm",
+    category: "audit_pitch",
+    isDefault: false,
+    isSystem: true,
+    description: "Tailored for Content Creators and Influencers offering retention-style video editing and media kits.",
+    tags: ["Creator", "Instagram DM", "Reels", "Video"],
+    subject: "",
+    body: `Hey {{instagram_handle}}! Love your recent content and audience vibe.
+
+{{ai_pitch_message}}
+
+I specialize in retention video pacing and dynamic visual hooks for creators. I actually storyboarded 2 viral hook concepts for your niche—mind if I send over the 30-second preview?
+
+— {{freelancer_name}} ({{portfolio_url}})`,
+    createdAt: "2026-09-01T00:00:00.000Z",
+    updatedAt: "2026-09-01T00:00:00.000Z",
+  },
+  {
+    id: "tpl_phone_cold_call",
+    name: "Cold Call & Voicemail 30-Sec Script",
+    channel: "all",
+    category: "cold_outreach",
+    isDefault: false,
+    isSystem: true,
+    description: "Proven phone discovery script with pattern-interrupt opener and zero-pressure offer.",
+    tags: ["Phone Script", "Voicemail", "Cold Call"],
+    subject: "Phone Prospecting Script for {{business_name}}",
+    body: `[CALL OPENER]:
+"Hi! This is {{freelancer_name}}—I know you weren't expecting my call, so I'll be brief!
+
+I was looking at {{business_name}}'s listing in {{city}} and saw your {{google_rating}}★ rating on Google.
+
+I noticed that {{primary_gap}} is currently creating a small bottleneck where interested local customers might drop off before calling or booking.
+
+{{ai_pitch_message}}
+
+I put together a quick 1-page breakdown showing how {{gap_solution}} can easily recover {{gap_impact}}.
+
+Could I email or WhatsApp that 1-page PDF over for you to glance at?"`,
+    createdAt: "2026-09-01T00:00:00.000Z",
+    updatedAt: "2026-09-01T00:00:00.000Z",
+  },
+  {
     id: "tpl_followup_3day",
     name: "The 3-Day Polite Follow-Up Bump",
     channel: "email",

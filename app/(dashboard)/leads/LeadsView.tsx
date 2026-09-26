@@ -26,12 +26,19 @@ import {
   RotateCcw,
   Filter,
   Mail,
+  Clock,
+  Calendar,
+  Folder,
+  Trash2,
+  CheckSquare,
+  Square,
 } from "lucide-react";
 import {
   type Gap,
   type Lead,
   type PitchBundle,
   type UrgencyLevel,
+  type LeadFolder,
   PRESET_LEAD_TAGS,
   getTagStyle,
 } from "@/types";
@@ -39,12 +46,57 @@ import { OpportunityScore } from "@/components/ui/OpportunityScore";
 import { UrgencyBadge } from "@/components/ui/UrgencyBadge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { getLocalLeads, updateLocalLead } from "@/lib/local-store";
+import {
+  getLocalLeads,
+  updateLocalLead,
+  getLocalFolders,
+  createLocalFolder,
+  deleteLocalFolder,
+  assignLeadToFolder,
+  assignLeadsToFolderBulk,
+  deleteLocalLead,
+  deleteLocalLeadsBulk,
+  saveLocalLeads,
+} from "@/lib/local-store";
 import { toast } from "sonner";
 import { OutreachTemplateModal } from "@/components/leads/OutreachTemplateModal";
+import { LeadFolderBar } from "@/components/leads/LeadFolderBar";
 
 interface LeadsViewProps {
   initialLeads: Lead[];
+}
+
+function formatLeadSearchTime(dateStr?: string | null): { relative: string; full: string } {
+  if (!dateStr) return { relative: "Recently", full: "Discovered recently" };
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return { relative: "Recently", full: "Discovered recently" };
+
+  const now = Date.now();
+  const diffMs = now - d.getTime();
+  const diffSec = Math.floor(diffMs / 1000);
+  const diffMin = Math.floor(diffSec / 60);
+  const diffHours = Math.floor(diffMin / 60);
+  const diffDays = Math.floor(diffHours / 24);
+
+  const full = d.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+  if (diffSec < 60) return { relative: "Just now", full };
+  if (diffMin < 60) return { relative: `${diffMin}m ago`, full };
+  if (diffHours < 24) return { relative: `${diffHours}h ago`, full };
+  if (diffDays === 1) return { relative: "Yesterday", full };
+  if (diffDays < 7) return { relative: `${diffDays}d ago`, full };
+  if (diffDays < 30) return { relative: `${Math.floor(diffDays / 7)}w ago`, full };
+
+  return {
+    relative: d.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+    full,
+  };
 }
 
 export function LeadsView({ initialLeads }: LeadsViewProps) {
@@ -52,14 +104,35 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
   const [filterTier, setFilterTier] = useState<"all" | "high" | "medium" | "low">("all");
   const [selectedTag, setSelectedTag] = useState<string>("all");
   const [filterGap, setFilterGap] = useState<string>("all");
-  const [sortBy, setSortBy] = useState<"score_desc" | "score_asc" | "location_asc" | "industry_asc" | "rating_asc" | "reviews_asc" | "name_asc">("score_desc");
+  const [timeFilter, setTimeFilter] = useState<"all" | "today" | "7d" | "30d" | "90d" | "custom">("all");
+  const [customStartDate, setCustomStartDate] = useState<string>("");
+  const [customEndDate, setCustomEndDate] = useState<string>("");
+  const [sortBy, setSortBy] = useState<
+    | "score_desc"
+    | "score_asc"
+    | "time_desc"
+    | "time_asc"
+    | "location_asc"
+    | "industry_asc"
+    | "rating_asc"
+    | "reviews_asc"
+    | "name_asc"
+  >("score_desc");
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTagPickerId, setActiveTagPickerId] = useState<string | null>(null);
   const [customTagInput, setCustomTagInput] = useState("");
   const [selectedLeadForTemplate, setSelectedLeadForTemplate] = useState<Lead | null>(null);
   const tagPickerRef = useRef<HTMLDivElement>(null);
 
-  // Advanced Filters State: Opportunity Score, Location, and Industry Type
+  // Folder & Multi-Select States
+  const [folders, setFolders] = useState<LeadFolder[]>(() => getLocalFolders());
+  const [selectedFolder, setSelectedFolder] = useState<string>("all");
+  const [selectedLeadIds, setSelectedLeadIds] = useState<Set<string>>(new Set());
+  const [activeFolderDropdownId, setActiveFolderDropdownId] = useState<string | null>(null);
+  const [showBulkMoveDropdown, setShowBulkMoveDropdown] = useState<boolean>(false);
+  const folderDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Advanced Filters State: Opportunity Score, Location, Industry Type, Search Time
   const [minScore, setMinScore] = useState<number>(0);
   const [maxScore, setMaxScore] = useState<number>(100);
   const [selectedLocation, setSelectedLocation] = useState<string>("all");
@@ -180,6 +253,8 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
           pitchTips: [],
         }),
         estimatedBudget: (item.estimatedBudget ?? item.estimated_budget ?? null) as string | null,
+        folderId: (item.folderId ?? item.folder_id ?? null) as string | null,
+        folderName: (item.folderName ?? item.folder_name ?? null) as string | null,
         status: (item.status ?? "new") as "new" | "viewed" | "contacted" | "won" | "lost",
         notes: (item.notes ?? null) as string | null,
         tags,
@@ -188,6 +263,161 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
       } as Lead;
     });
   }, [leadsList]);
+
+  // Click outside to close folder dropdown
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (folderDropdownRef.current && !folderDropdownRef.current.contains(e.target as Node)) {
+        setActiveFolderDropdownId(null);
+        setShowBulkMoveDropdown(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // Compute Location Groups (Location-Wise auto folders)
+  const locationGroups = useMemo(() => {
+    const map = new Map<string, { count: number; totalScore: number }>();
+    normalizedLeads.forEach((l) => {
+      const rawLoc = l.location || "";
+      const parts = rawLoc.split(",").map((s) => s.trim()).filter(Boolean);
+      const primaryCity = parts[0] || "General Territory";
+      const existing = map.get(primaryCity) || { count: 0, totalScore: 0 };
+      existing.count += 1;
+      existing.totalScore += l.opportunityScore;
+      map.set(primaryCity, existing);
+    });
+
+    return Array.from(map.entries())
+      .map(([name, stat]) => ({
+        name,
+        count: stat.count,
+        avgScore: Math.round(stat.totalScore / stat.count),
+      }))
+      .sort((a, b) => b.count - a.count);
+  }, [normalizedLeads]);
+
+  function handleCreateFolder(name: string, color: string, description: string) {
+    const newFolder = createLocalFolder(name, color, description);
+    setFolders(getLocalFolders());
+    setSelectedFolder(newFolder.id);
+    toast.success(`Created folder "${name}"`);
+  }
+
+  function handleDeleteFolder(folderId: string) {
+    deleteLocalFolder(folderId);
+    setFolders(getLocalFolders());
+    if (selectedFolder === folderId) setSelectedFolder("all");
+    toast.success("Folder deleted. Leads were kept in All Leads.");
+  }
+
+  function handleAssignLeadFolder(leadId: string, folderId: string | null) {
+    assignLeadToFolder(leadId, folderId);
+    const folderObj = folderId ? folders.find((f) => f.id === folderId) : null;
+    setLeadsList((prev) =>
+      prev.map((l) =>
+        l.id === leadId
+          ? {
+              ...l,
+              folderId: folderId || null,
+              folderName: folderObj ? folderObj.name : null,
+            }
+          : l
+      )
+    );
+    setActiveFolderDropdownId(null);
+    toast.success(folderObj ? `Lead moved to "${folderObj.name}"` : "Lead removed from folder");
+  }
+
+  function handleDeleteLead(leadId: string, leadName: string) {
+    const leadToDelete = normalizedLeads.find((l) => l.id === leadId);
+    if (!leadToDelete) return;
+
+    setLeadsList((prev) => prev.filter((l) => l.id !== leadId));
+    deleteLocalLead(leadId);
+    setSelectedLeadIds((prev) => {
+      const next = new Set(prev);
+      next.delete(leadId);
+      return next;
+    });
+
+    toast(`Deleted "${leadName}"`, {
+      action: {
+        label: "Undo",
+        onClick: () => {
+          setLeadsList((prev) => [leadToDelete, ...prev]);
+          const current = getLocalLeads();
+          saveLocalLeads([leadToDelete, ...current]);
+          toast.success(`Restored "${leadName}"`);
+        },
+      },
+    });
+  }
+
+  function handleBulkDelete() {
+    if (selectedLeadIds.size === 0) return;
+    const count = selectedLeadIds.size;
+    const idsToDelete = Array.from(selectedLeadIds);
+    const deletedBackup = normalizedLeads.filter((l) => selectedLeadIds.has(l.id));
+
+    setLeadsList((prev) => prev.filter((l) => !selectedLeadIds.has(l.id)));
+    deleteLocalLeadsBulk(idsToDelete);
+    setSelectedLeadIds(new Set());
+
+    toast.success(`Deleted ${count} selected leads`, {
+      action: {
+        label: "Undo",
+        onClick: () => {
+          setLeadsList((prev) => [...deletedBackup, ...prev]);
+          const current = getLocalLeads();
+          saveLocalLeads([...deletedBackup, ...current]);
+          toast.success(`Restored ${count} leads`);
+        },
+      },
+    });
+  }
+
+  function handleBulkMove(folderId: string | null) {
+    if (selectedLeadIds.size === 0) return;
+    const ids = Array.from(selectedLeadIds);
+    assignLeadsToFolderBulk(ids, folderId);
+    const folderObj = folderId ? folders.find((f) => f.id === folderId) : null;
+
+    setLeadsList((prev) =>
+      prev.map((l) =>
+        selectedLeadIds.has(l.id)
+          ? {
+              ...l,
+              folderId: folderId || null,
+              folderName: folderObj ? folderObj.name : null,
+            }
+          : l
+      )
+    );
+    setShowBulkMoveDropdown(false);
+    setSelectedLeadIds(new Set());
+    toast.success(
+      `Moved ${ids.length} leads to ${folderObj ? `"${folderObj.name}"` : "All Leads"}`
+    );
+  }
+
+  function toggleSelectLead(id: string) {
+    setSelectedLeadIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    if (selectedLeadIds.size === filteredLeads.length && filteredLeads.length > 0) {
+      setSelectedLeadIds(new Set());
+    } else {
+      setSelectedLeadIds(new Set(filteredLeads.map((l) => l.id)));
+    }
+  }
 
   // Toggle or add/remove a tag on a lead
   async function handleToggleTag(leadId: string, tagToToggle: string) {
@@ -346,6 +576,35 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
   const filteredLeads = useMemo(() => {
     return normalizedLeads
       .filter((l) => {
+        // 0. Folder filter (Location-wise or Custom folder)
+        if (selectedFolder === "all") return true;
+        if (selectedFolder.startsWith("loc:")) {
+          const targetLoc = selectedFolder.replace("loc:", "").toLowerCase().trim();
+          const leadLoc = (l.location || "").toLowerCase().trim();
+          return leadLoc.includes(targetLoc);
+        }
+        if (selectedFolder === "folder_hot_deals") {
+          return l.folderId === "folder_hot_deals" || l.opportunityScore >= 75;
+        }
+        if (selectedFolder === "folder_follow_ups") {
+          return (
+            l.folderId === "folder_follow_ups" ||
+            (l.tags || []).some((t) => t.toLowerCase().includes("follow")) ||
+            l.status === "contacted"
+          );
+        }
+        if (selectedFolder === "folder_high_budget") {
+          return (
+            l.folderId === "folder_high_budget" ||
+            (l.tags || []).some((t) => t.toLowerCase().includes("budget"))
+          );
+        }
+        if (selectedFolder === "folder_closed_won") {
+          return l.folderId === "folder_closed_won" || l.status === "won";
+        }
+        return l.folderId === selectedFolder;
+      })
+      .filter((l) => {
         // 1. Tier filter (score tier)
         if (filterTier !== "all") {
           const tier = getLeadTier(l);
@@ -456,7 +715,33 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
         return true;
       })
       .filter((l) => {
-        // 7. Text Search query
+        // 7. Time / Search Date filter
+        if (timeFilter === "all") return true;
+        const leadTime = l.createdAt ? new Date(l.createdAt).getTime() : 0;
+        if (!leadTime || isNaN(leadTime)) return true;
+
+        const now = Date.now();
+        if (timeFilter === "today") {
+          return now - leadTime <= 24 * 60 * 60 * 1000;
+        }
+        if (timeFilter === "7d") {
+          return now - leadTime <= 7 * 24 * 60 * 60 * 1000;
+        }
+        if (timeFilter === "30d") {
+          return now - leadTime <= 30 * 24 * 60 * 60 * 1000;
+        }
+        if (timeFilter === "90d") {
+          return now - leadTime <= 90 * 24 * 60 * 60 * 1000;
+        }
+        if (timeFilter === "custom") {
+          const startMs = customStartDate ? new Date(`${customStartDate}T00:00:00`).getTime() : 0;
+          const endMs = customEndDate ? new Date(`${customEndDate}T23:59:59`).getTime() : Infinity;
+          return leadTime >= startMs && leadTime <= endMs;
+        }
+        return true;
+      })
+      .filter((l) => {
+        // 8. Text Search query
         if (!searchQuery.trim()) return true;
         const q = searchQuery.toLowerCase().trim();
         const cleanQueryDigits = q.replace(/[^0-9]/g, "");
@@ -492,6 +777,16 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
         );
       })
       .sort((a, b) => {
+        if (sortBy === "time_desc") {
+          const tA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+          const tB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          return tB - tA;
+        }
+        if (sortBy === "time_asc") {
+          const tA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+          const tB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          return tA - tB;
+        }
         if (sortBy === "score_asc") return a.opportunityScore - b.opportunityScore;
         if (sortBy === "location_asc") return a.location.localeCompare(b.location);
         if (sortBy === "industry_asc") return a.businessCategory.localeCompare(b.businessCategory);
@@ -502,6 +797,7 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
       });
   }, [
     normalizedLeads,
+    selectedFolder,
     filterTier,
     minScore,
     maxScore,
@@ -509,6 +805,9 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
     selectedIndustry,
     selectedTag,
     filterGap,
+    timeFilter,
+    customStartDate,
+    customEndDate,
     searchQuery,
     sortBy,
   ]);
@@ -526,16 +825,18 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
     if (minScore > 0 || maxScore < 100) count++;
     if (selectedLocation !== "all") count++;
     if (selectedIndustry !== "all") count++;
+    if (timeFilter !== "all") count++;
     if (filterGap !== "all") count++;
     if (filterTier !== "all") count++;
     if (selectedTag !== "all") count++;
     return count;
-  }, [minScore, maxScore, selectedLocation, selectedIndustry, filterGap, filterTier, selectedTag]);
+  }, [minScore, maxScore, selectedLocation, selectedIndustry, timeFilter, filterGap, filterTier, selectedTag]);
 
   const hasActiveFilters =
     filterTier !== "all" ||
     selectedTag !== "all" ||
     filterGap !== "all" ||
+    timeFilter !== "all" ||
     minScore > 0 ||
     maxScore < 100 ||
     selectedLocation !== "all" ||
@@ -546,6 +847,9 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
     setFilterTier("all");
     setSelectedTag("all");
     setFilterGap("all");
+    setTimeFilter("all");
+    setCustomStartDate("");
+    setCustomEndDate("");
     setMinScore(0);
     setMaxScore(100);
     setSelectedLocation("all");
@@ -617,7 +921,7 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-neutral-900">Discovered Leads</h1>
           <p className="mt-1 text-sm text-neutral-500">
-            Categorize leads with tags (Hot, Warm, Cold, Follow-up) and prioritize high-opportunity outreach.
+            Organize leads by territory location or custom folders, categorize with tags, and prioritize high-converting outreach.
           </p>
         </div>
         <Link href="/search">
@@ -627,6 +931,17 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
           </Button>
         </Link>
       </div>
+
+      {/* Lead Organization & Folders Bar */}
+      <LeadFolderBar
+        folders={folders}
+        locationGroups={locationGroups}
+        selectedFolder={selectedFolder}
+        totalLeadsCount={normalizedLeads.length}
+        onSelectFolder={(fId) => setSelectedFolder(fId)}
+        onCreateFolder={handleCreateFolder}
+        onDeleteFolder={handleDeleteFolder}
+      />
 
       {/* Summary Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
@@ -864,6 +1179,20 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
               <option value="low_rating">Suboptimal Rating (&lt; 4.5★)</option>
             </select>
 
+            {/* Time / Search Date Filter */}
+            <select
+              value={timeFilter}
+              onChange={(e) => setTimeFilter(e.target.value as typeof timeFilter)}
+              className="h-9 px-3 rounded-lg border border-neutral-200 bg-white text-xs text-neutral-700 font-medium focus:outline-none focus:ring-2 focus:ring-primary/30 shrink-0"
+            >
+              <option value="all">🕒 All Time</option>
+              <option value="today">🕒 Last 24 Hours (Today)</option>
+              <option value="7d">🕒 Past 7 Days</option>
+              <option value="30d">🕒 Past 30 Days</option>
+              <option value="90d">🕒 Past 90 Days</option>
+              <option value="custom">📅 Custom Date Range...</option>
+            </select>
+
             {/* Sort Dropdown */}
             <select
               value={sortBy}
@@ -872,6 +1201,8 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
             >
               <option value="score_desc">Score: High to Low</option>
               <option value="score_asc">Score: Low to High</option>
+              <option value="time_desc">Search Time: Newest First</option>
+              <option value="time_asc">Search Time: Oldest First</option>
               <option value="location_asc">Location: A to Z</option>
               <option value="industry_asc">Industry: A to Z</option>
               <option value="rating_asc">Rating: Lowest First</option>
@@ -881,6 +1212,32 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
           </div>
 
           <div className="flex items-center gap-2 self-end md:self-auto text-xs text-neutral-500">
+            {filteredLeads.length > 0 && (
+              <button
+                type="button"
+                onClick={toggleSelectAll}
+                className={cn(
+                  "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-semibold transition-all select-none",
+                  selectedLeadIds.size === filteredLeads.length && filteredLeads.length > 0
+                    ? "bg-primary text-white border-primary shadow-xs"
+                    : selectedLeadIds.size > 0
+                    ? "bg-primary/10 text-primary border-primary/30"
+                    : "bg-white text-neutral-700 hover:bg-neutral-50 border-neutral-200"
+                )}
+              >
+                {selectedLeadIds.size === filteredLeads.length && filteredLeads.length > 0 ? (
+                  <CheckSquare className="h-3.5 w-3.5" />
+                ) : (
+                  <Square className="h-3.5 w-3.5" />
+                )}
+                <span>
+                  {selectedLeadIds.size === filteredLeads.length && filteredLeads.length > 0
+                    ? "Deselect All"
+                    : `Select All (${filteredLeads.length})`}
+                </span>
+              </button>
+            )}
+
             {hasActiveFilters && (
               <button
                 type="button"
@@ -948,8 +1305,8 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
               </div>
             </div>
 
-            {/* 3 Advanced Filter Controls Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* 4 Advanced Filter Controls Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               {/* Filter 1: Opportunity Score */}
               <div className="p-3.5 rounded-lg border border-neutral-200 bg-white space-y-3 shadow-xs">
                 <div className="flex items-center justify-between">
@@ -968,10 +1325,10 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
                     )}
                   >
                     {minScore === 0 && maxScore === 100
-                      ? "All Scores (0–100)"
+                      ? "All (0–100)"
                       : minScore > 0 && maxScore === 100
-                      ? `Score ≥ ${minScore}`
-                      : `${minScore} – ${maxScore}`}
+                      ? `≥ ${minScore}`
+                      : `${minScore}–${maxScore}`}
                   </span>
                 </div>
 
@@ -981,7 +1338,7 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
                     type="button"
                     onClick={() => handleScorePreset("all")}
                     className={cn(
-                      "px-2 py-1 rounded text-[11px] font-medium transition-colors border",
+                      "px-2 py-0.5 rounded text-[11px] font-medium transition-colors border",
                       minScore === 0 && maxScore === 100
                         ? "bg-neutral-900 text-white border-neutral-900 font-semibold"
                         : "bg-neutral-50 text-neutral-600 hover:bg-neutral-100 border-neutral-200"
@@ -993,7 +1350,7 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
                     type="button"
                     onClick={() => handleScorePreset("elite")}
                     className={cn(
-                      "px-2 py-1 rounded text-[11px] font-medium transition-colors border",
+                      "px-2 py-0.5 rounded text-[11px] font-medium transition-colors border",
                       minScore === 85 && maxScore === 100
                         ? "bg-rose-600 text-white border-rose-600 font-semibold shadow-xs"
                         : "bg-rose-50/70 text-rose-700 hover:bg-rose-100/70 border-rose-200"
@@ -1005,7 +1362,7 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
                     type="button"
                     onClick={() => handleScorePreset("high")}
                     className={cn(
-                      "px-2 py-1 rounded text-[11px] font-medium transition-colors border",
+                      "px-2 py-0.5 rounded text-[11px] font-medium transition-colors border",
                       minScore === 75 && maxScore === 100
                         ? "bg-rose-500 text-white border-rose-500 font-semibold shadow-xs"
                         : "bg-rose-50/50 text-rose-700 hover:bg-rose-100/50 border-rose-200"
@@ -1017,32 +1374,20 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
                     type="button"
                     onClick={() => handleScorePreset("moderate")}
                     className={cn(
-                      "px-2 py-1 rounded text-[11px] font-medium transition-colors border",
+                      "px-2 py-0.5 rounded text-[11px] font-medium transition-colors border",
                       minScore === 60 && maxScore === 74
                         ? "bg-amber-600 text-white border-amber-600 font-semibold shadow-xs"
                         : "bg-amber-50 text-amber-700 hover:bg-amber-100 border-amber-200"
                     )}
                   >
-                    60–74 Medium
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleScorePreset("low")}
-                    className={cn(
-                      "px-2 py-1 rounded text-[11px] font-medium transition-colors border",
-                      minScore === 0 && maxScore === 59
-                        ? "bg-neutral-700 text-white border-neutral-700 font-semibold shadow-xs"
-                        : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200 border-neutral-200"
-                    )}
-                  >
-                    &lt; 60 Low
+                    60–74 Med
                   </button>
                 </div>
 
                 {/* Score Slider */}
                 <div className="space-y-1 pt-1">
                   <div className="flex justify-between text-[10px] text-neutral-400 font-medium">
-                    <span>Min Score: {minScore}</span>
+                    <span>Min: {minScore}</span>
                     <span>Max: {maxScore}</span>
                   </div>
                   <input
@@ -1059,17 +1404,122 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
                     }}
                     className="w-full h-1.5 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-rose-600"
                   />
-                  <div className="flex justify-between text-[9px] text-neutral-400">
-                    <span>0</span>
-                    <span className="text-amber-600 font-semibold">60 (Medium)</span>
-                    <span className="text-rose-600 font-semibold">75 (High)</span>
-                    <span className="text-rose-700 font-semibold">85 (Elite)</span>
-                    <span>100</span>
-                  </div>
                 </div>
               </div>
 
-              {/* Filter 2: Location */}
+              {/* Filter 2: Search Time / Date Range */}
+              <div className="p-3.5 rounded-lg border border-neutral-200 bg-white space-y-3 shadow-xs">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-xs font-semibold text-neutral-800">
+                    <Clock className="h-4 w-4 text-purple-600" />
+                    <span>Search Time / Date</span>
+                  </div>
+                  <span className="text-[11px] text-neutral-400 font-medium capitalize">
+                    {timeFilter === "all" ? "All Time" : timeFilter}
+                  </span>
+                </div>
+
+                {/* Time Presets */}
+                <div className="flex flex-wrap gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setTimeFilter("all")}
+                    className={cn(
+                      "px-2 py-0.5 rounded text-[11px] font-medium transition-colors border",
+                      timeFilter === "all"
+                        ? "bg-purple-600 text-white border-purple-600 font-semibold"
+                        : "bg-neutral-50 text-neutral-600 hover:bg-neutral-100 border-neutral-200"
+                    )}
+                  >
+                    All
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTimeFilter("today")}
+                    className={cn(
+                      "px-2 py-0.5 rounded text-[11px] font-medium transition-colors border",
+                      timeFilter === "today"
+                        ? "bg-purple-600 text-white border-purple-600 font-semibold"
+                        : "bg-purple-50/70 text-purple-700 hover:bg-purple-100 border-purple-200"
+                    )}
+                  >
+                    Today
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTimeFilter("7d")}
+                    className={cn(
+                      "px-2 py-0.5 rounded text-[11px] font-medium transition-colors border",
+                      timeFilter === "7d"
+                        ? "bg-purple-600 text-white border-purple-600 font-semibold"
+                        : "bg-neutral-50 text-neutral-600 hover:bg-neutral-100 border-neutral-200"
+                    )}
+                  >
+                    7 Days
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTimeFilter("30d")}
+                    className={cn(
+                      "px-2 py-0.5 rounded text-[11px] font-medium transition-colors border",
+                      timeFilter === "30d"
+                        ? "bg-purple-600 text-white border-purple-600 font-semibold"
+                        : "bg-neutral-50 text-neutral-600 hover:bg-neutral-100 border-neutral-200"
+                    )}
+                  >
+                    30 Days
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTimeFilter("custom")}
+                    className={cn(
+                      "px-2 py-0.5 rounded text-[11px] font-medium transition-colors border",
+                      timeFilter === "custom"
+                        ? "bg-purple-600 text-white border-purple-600 font-semibold"
+                        : "bg-neutral-50 text-neutral-600 hover:bg-neutral-100 border-neutral-200"
+                    )}
+                  >
+                    Custom...
+                  </button>
+                </div>
+
+                {/* Custom Date Pickers */}
+                {timeFilter === "custom" ? (
+                  <div className="grid grid-cols-2 gap-1.5 pt-0.5 animate-in fade-in-50 duration-150">
+                    <div>
+                      <label className="text-[9px] uppercase font-semibold text-neutral-400 block mb-0.5">From</label>
+                      <input
+                        type="date"
+                        value={customStartDate}
+                        onChange={(e) => setCustomStartDate(e.target.value)}
+                        className="w-full h-7 px-1.5 text-[11px] rounded border border-neutral-200 bg-neutral-50 text-neutral-800"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[9px] uppercase font-semibold text-neutral-400 block mb-0.5">To</label>
+                      <input
+                        type="date"
+                        value={customEndDate}
+                        onChange={(e) => setCustomEndDate(e.target.value)}
+                        className="w-full h-7 px-1.5 text-[11px] rounded border border-neutral-200 bg-neutral-50 text-neutral-800"
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-[11px] text-neutral-500 pt-0.5 flex items-center gap-1">
+                    <Calendar className="h-3 w-3 text-neutral-400" />
+                    <span>
+                      {timeFilter === "all" && "Showing all historical searches"}
+                      {timeFilter === "today" && "Leads discovered in last 24 hours"}
+                      {timeFilter === "7d" && "Leads discovered in past 7 days"}
+                      {timeFilter === "30d" && "Leads discovered in past month"}
+                      {timeFilter === "90d" && "Leads discovered in past quarter"}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Filter 3: Location */}
               <div className="p-3.5 rounded-lg border border-neutral-200 bg-white space-y-3 shadow-xs">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5 text-xs font-semibold text-neutral-800">
@@ -1090,7 +1540,7 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
                   <option value="all">All Locations ({normalizedLeads.length} leads)</option>
                   {availableLocations.map((loc) => (
                     <option key={loc.location} value={loc.location}>
-                      {loc.location} ({loc.count} leads • avg score {loc.avgScore})
+                      {loc.location} ({loc.count} leads • avg {loc.avgScore})
                     </option>
                   ))}
                 </select>
@@ -1113,7 +1563,7 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
                     >
                       All
                     </button>
-                    {availableLocations.slice(0, 4).map((loc) => {
+                    {availableLocations.slice(0, 3).map((loc) => {
                       const isSelected = selectedLocation.toLowerCase() === loc.location.toLowerCase();
                       return (
                         <button
@@ -1121,7 +1571,7 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
                           type="button"
                           onClick={() => setSelectedLocation(isSelected ? "all" : loc.location)}
                           className={cn(
-                            "px-2 py-0.5 rounded text-[11px] font-medium transition-colors border truncate max-w-[140px]",
+                            "px-2 py-0.5 rounded text-[11px] font-medium transition-colors border truncate max-w-[120px]",
                             isSelected
                               ? "bg-emerald-50 text-emerald-800 border-emerald-300 ring-1 ring-emerald-400 font-semibold"
                               : "bg-white text-neutral-700 hover:bg-neutral-50 border-neutral-200"
@@ -1139,15 +1589,15 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
                 </div>
               </div>
 
-              {/* Filter 3: Industry Type */}
+              {/* Filter 4: Industry Type */}
               <div className="p-3.5 rounded-lg border border-neutral-200 bg-white space-y-3 shadow-xs">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5 text-xs font-semibold text-neutral-800">
                     <Building2 className="h-4 w-4 text-blue-600" />
-                    <span>Industry Type / Niche</span>
+                    <span>Industry / Niche</span>
                   </div>
                   <span className="text-[11px] text-neutral-400 font-medium">
-                    {availableIndustries.length} industries
+                    {availableIndustries.length} niches
                   </span>
                 </div>
 
@@ -1160,7 +1610,7 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
                   <option value="all">All Industries ({normalizedLeads.length} leads)</option>
                   {availableIndustries.map((ind) => (
                     <option key={ind.category} value={ind.category}>
-                      {ind.category} ({ind.count} leads • avg score {ind.avgScore})
+                      {ind.category} ({ind.count} leads • avg {ind.avgScore})
                     </option>
                   ))}
                 </select>
@@ -1183,7 +1633,7 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
                     >
                       All
                     </button>
-                    {availableIndustries.slice(0, 4).map((ind) => {
+                    {availableIndustries.slice(0, 3).map((ind) => {
                       const isSelected = selectedIndustry.toLowerCase() === ind.category.toLowerCase();
                       return (
                         <button
@@ -1191,7 +1641,7 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
                           type="button"
                           onClick={() => setSelectedIndustry(isSelected ? "all" : ind.category)}
                           className={cn(
-                            "px-2 py-0.5 rounded text-[11px] font-medium transition-colors border truncate max-w-[140px]",
+                            "px-2 py-0.5 rounded text-[11px] font-medium transition-colors border truncate max-w-[120px]",
                             isSelected
                               ? "bg-blue-50 text-blue-800 border-blue-300 ring-1 ring-blue-400 font-semibold"
                               : "bg-white text-neutral-700 hover:bg-neutral-50 border-neutral-200"
@@ -1237,6 +1687,30 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
                 onClick={() => setMaxScore(100)}
                 className="hover:text-neutral-950 ml-0.5"
                 title="Remove max score filter"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          )}
+
+          {timeFilter !== "all" && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-purple-50 text-purple-800 text-[11px] font-semibold border border-purple-200 animate-in fade-in-50">
+              <Clock className="h-3 w-3 text-purple-600" />
+              {timeFilter === "today" && "Time: Last 24h"}
+              {timeFilter === "7d" && "Time: Past 7 Days"}
+              {timeFilter === "30d" && "Time: Past 30 Days"}
+              {timeFilter === "90d" && "Time: Past 90 Days"}
+              {timeFilter === "custom" &&
+                `Date: ${customStartDate || "Start"} to ${customEndDate || "Now"}`}
+              <button
+                type="button"
+                onClick={() => {
+                  setTimeFilter("all");
+                  setCustomStartDate("");
+                  setCustomEndDate("");
+                }}
+                className="hover:text-purple-950 ml-0.5"
+                title="Clear time filter"
               >
                 <X className="h-3 w-3" />
               </button>
@@ -1363,15 +1837,40 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
             const mainGap = lead.gapsFound && lead.gapsFound.length > 0 ? lead.gapsFound[0] : null;
             const leadTags = lead.tags || [];
             const isPickerOpen = activeTagPickerId === lead.id;
+            const isFolderOpen = activeFolderDropdownId === lead.id;
+            const isSelectedLead = selectedLeadIds.has(lead.id);
 
           return (
             <div
               key={lead.id}
-              className="relative group bg-white border border-neutral-200/80 hover:border-primary/50 hover:shadow-md transition-all duration-200 rounded-xl p-5"
+              className={cn(
+                "relative group bg-white border transition-all duration-200 rounded-xl p-5",
+                isSelectedLead
+                  ? "border-primary ring-2 ring-primary/20 shadow-sm bg-primary/[0.01]"
+                  : "border-neutral-200/80 hover:border-primary/50 hover:shadow-md"
+              )}
             >
               <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-                {/* Left Column: Score Ring + Details */}
-                <div className="flex items-start gap-4 min-w-0 flex-1">
+                {/* Left Column: Checkbox + Score Ring + Details */}
+                <div className="flex items-start gap-3.5 min-w-0 flex-1">
+                  {/* Selection Checkbox */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleSelectLead(lead.id);
+                    }}
+                    className={cn(
+                      "h-5 w-5 rounded border flex items-center justify-center transition-colors shrink-0 mt-2",
+                      isSelectedLead
+                        ? "bg-primary text-white border-primary"
+                        : "border-neutral-300 hover:border-neutral-400 bg-white"
+                    )}
+                    title={isSelectedLead ? "Deselect lead" : "Select lead"}
+                  >
+                    {isSelectedLead ? <Check className="h-3.5 w-3.5 stroke-[3]" /> : null}
+                  </button>
+
                   {/* Opportunity Score Ring */}
                   <div className="shrink-0 flex flex-col items-center">
                     <OpportunityScore score={lead.opportunityScore} size={68} strokeWidth={6} />
@@ -1394,6 +1893,29 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
                       <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-neutral-100 text-neutral-700">
                         {lead.businessCategory}
                       </span>
+
+                      {/* Folder Pill / Indicator */}
+                      {lead.folderId && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-primary/10 text-primary border border-primary/20">
+                          <Folder className="h-3 w-3" />
+                          {lead.folderName ||
+                            folders.find((f) => f.id === lead.folderId)?.name ||
+                            "Folder"}
+                        </span>
+                      )}
+
+                      {(() => {
+                        const timeInfo = formatLeadSearchTime(lead.createdAt);
+                        return (
+                          <span
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-neutral-50 text-neutral-600 border border-neutral-200"
+                            title={timeInfo.full}
+                          >
+                            <Clock className="h-3 w-3 text-neutral-400" />
+                            {timeInfo.relative}
+                          </span>
+                        );
+                      })()}
                       {lead.status === "contacted" && (
                         <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-blue-50 text-blue-700 border border-blue-200">
                           Contacted
@@ -1510,6 +2032,70 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
                                 <Plus className="h-3.5 w-3.5" />
                               </button>
                             </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Move to Folder Quick Action Button */}
+                      <div className="relative inline-block">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setActiveFolderDropdownId(isFolderOpen ? null : lead.id);
+                          }}
+                          className={cn(
+                            "inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium transition-colors border",
+                            lead.folderId
+                              ? "bg-primary/5 text-primary border-primary/30 hover:bg-primary/10"
+                              : "bg-neutral-100 hover:bg-neutral-200/80 text-neutral-600 border-neutral-200"
+                          )}
+                          title="Move lead to a folder"
+                        >
+                          <Folder className="h-3 w-3" />
+                          <span>{lead.folderId ? "Folder" : "+ Folder"}</span>
+                        </button>
+
+                        {isFolderOpen && (
+                          <div
+                            ref={folderDropdownRef}
+                            onClick={(e) => e.stopPropagation()}
+                            className="absolute left-0 top-full mt-1.5 z-50 w-52 p-1.5 bg-white rounded-xl shadow-xl border border-neutral-200 text-xs space-y-1 animate-in fade-in zoom-in-95 duration-150"
+                          >
+                            <div className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider px-2 py-0.5">
+                              Assign to Folder
+                            </div>
+                            {lead.folderId && (
+                              <button
+                                type="button"
+                                onClick={() => handleAssignLeadFolder(lead.id, null)}
+                                className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-neutral-100 text-rose-600 font-medium text-[11px]"
+                              >
+                                Remove from folder
+                              </button>
+                            )}
+                            {folders.map((f) => (
+                              <button
+                                key={f.id}
+                                type="button"
+                                onClick={() => handleAssignLeadFolder(lead.id, f.id)}
+                                className={cn(
+                                  "w-full text-left px-2 py-1.5 rounded-lg flex items-center justify-between text-[11px] transition-colors",
+                                  lead.folderId === f.id
+                                    ? "bg-primary/10 text-primary font-bold"
+                                    : "hover:bg-neutral-100 text-neutral-700"
+                                )}
+                              >
+                                <div className="flex items-center gap-1.5 truncate">
+                                  <span
+                                    className="h-2 w-2 rounded-full shrink-0"
+                                    style={{ backgroundColor: f.color }}
+                                  />
+                                  <span className="truncate">{f.name}</span>
+                                </div>
+                                {lead.folderId === f.id && <Check className="h-3 w-3 shrink-0" />}
+                              </button>
+                            ))}
                           </div>
                         )}
                       </div>
@@ -1653,15 +2239,27 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
                   </div>
                 </div>
 
-                {/* Right Column: CTA & Pitch Angle */}
+                {/* Right Column: CTA, Pitch Angle & Delete Button */}
                 <div className="flex sm:flex-col items-end justify-between sm:justify-center gap-3 border-t sm:border-t-0 pt-3 sm:pt-0 border-neutral-100 shrink-0">
-                  <div className="text-right hidden sm:block">
-                    <span className="text-[11px] text-neutral-400 block font-medium uppercase tracking-wider">
-                      Best Pitch Angle
-                    </span>
-                    <span className="text-xs font-semibold text-neutral-800 max-w-[200px] block truncate">
-                      {lead.bestService}
-                    </span>
+                  <div className="flex items-center gap-2">
+                    <div className="text-right hidden sm:block">
+                      <span className="text-[11px] text-neutral-400 block font-medium uppercase tracking-wider">
+                        Best Pitch Angle
+                      </span>
+                      <span className="text-xs font-semibold text-neutral-800 max-w-[170px] block truncate">
+                        {lead.bestService}
+                      </span>
+                    </div>
+
+                    {/* Delete Lead Button */}
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteLead(lead.id, lead.businessName)}
+                      className="text-neutral-400 hover:text-rose-600 p-1.5 rounded-lg hover:bg-rose-50 transition-colors shrink-0"
+                      title={`Delete "${lead.businessName}"`}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
                   </div>
 
                   <div className="flex items-center gap-2">
@@ -1688,6 +2286,80 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
             </div>
           );
         })}
+      </div>
+    )}
+
+    {/* Floating Bulk Actions Bar */}
+    {selectedLeadIds.size > 0 && (
+      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-neutral-900 text-white px-5 py-3 rounded-2xl shadow-2xl border border-neutral-700 flex items-center gap-4 animate-in slide-in-from-bottom-5 duration-200">
+        <div className="flex items-center gap-2 pr-2 border-r border-neutral-700 text-xs font-bold">
+          <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+          <span>{selectedLeadIds.size} Leads Selected</span>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {/* Move to folder dropdown */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setShowBulkMoveDropdown(!showBulkMoveDropdown)}
+              className="h-8 px-3 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-xs font-semibold flex items-center gap-1.5 transition-colors"
+            >
+              <Folder className="h-3.5 w-3.5 text-primary" />
+              <span>Move to Folder...</span>
+              <ChevronDown className="h-3 w-3 opacity-60" />
+            </button>
+
+            {showBulkMoveDropdown && (
+              <div
+                ref={folderDropdownRef}
+                className="absolute left-0 bottom-full mb-2 w-56 p-1.5 rounded-xl bg-white text-neutral-900 shadow-xl border border-neutral-200 text-xs space-y-1 z-50 animate-in fade-in-50"
+              >
+                <div className="px-2 py-1 text-[10px] font-bold text-neutral-400 uppercase tracking-wider">
+                  Select Target Folder
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleBulkMove(null)}
+                  className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-neutral-100 flex items-center gap-2 text-neutral-600"
+                >
+                  <Folder className="h-3.5 w-3.5 text-neutral-400" />
+                  <span>None (Remove from folder)</span>
+                </button>
+                {folders.map((f) => (
+                  <button
+                    key={f.id}
+                    type="button"
+                    onClick={() => handleBulkMove(f.id)}
+                    className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-neutral-100 flex items-center gap-2 font-medium"
+                  >
+                    <span className="h-2 w-2 rounded-full" style={{ backgroundColor: f.color }} />
+                    <span className="truncate">{f.name}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Bulk Delete */}
+          <button
+            type="button"
+            onClick={handleBulkDelete}
+            className="h-8 px-3 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            <span>Delete Selected</span>
+          </button>
+
+          {/* Deselect All */}
+          <button
+            type="button"
+            onClick={() => setSelectedLeadIds(new Set())}
+            className="h-8 px-2.5 rounded-lg text-neutral-400 hover:text-white text-xs font-medium transition-colors"
+          >
+            Deselect
+          </button>
+        </div>
       </div>
     )}
 

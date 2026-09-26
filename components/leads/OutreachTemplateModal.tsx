@@ -12,6 +12,7 @@ import {
   Camera,
   Settings,
   Star,
+  PhoneCall,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -114,12 +115,12 @@ export function OutreachTemplateModal({
 
         {/* Channel Filter Strip */}
         <div className="flex items-center justify-between border-b border-neutral-100 px-6 py-2.5 bg-white text-xs">
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 overflow-x-auto py-0.5">
             {[
               { id: "email", label: "Cold Email", icon: Mail },
               { id: "instagram_dm", label: "Instagram DM", icon: Camera },
               { id: "whatsapp", label: "WhatsApp / SMS", icon: MessageCircle },
-              { id: "all", label: "All Templates", icon: Sparkles },
+              { id: "all", label: "All Frameworks", icon: Sparkles },
             ].map((ch) => {
               const Icon = ch.icon;
               return (
@@ -133,7 +134,7 @@ export function OutreachTemplateModal({
                     }
                   }}
                   className={cn(
-                    "px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5",
+                    "px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 shrink-0",
                     selectedChannel === ch.id
                       ? "bg-primary text-white font-semibold shadow-2xs"
                       : "text-neutral-600 hover:bg-neutral-100"
@@ -149,10 +150,10 @@ export function OutreachTemplateModal({
           <Link
             href="/settings"
             onClick={onClose}
-            className="text-[11px] text-primary hover:underline flex items-center gap-1 font-semibold"
+            className="text-[11px] text-primary hover:underline flex items-center gap-1 font-semibold shrink-0 ml-2"
           >
             <Settings className="h-3 w-3" />
-            <span>Manage Templates in Settings</span>
+            <span>Settings</span>
           </Link>
         </div>
 
@@ -259,6 +260,17 @@ export function OutreachTemplateModal({
                       >
                         <MessageCircle className="h-3.5 w-3.5" />
                         Send on WhatsApp
+                      </a>
+                    )}
+
+                    {leadPhone && (
+                      <a
+                        href={`tel:${leadPhone.replace(/[^0-9+]/g, "")}`}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-neutral-900 hover:bg-neutral-800 text-white text-xs font-semibold shadow-2xs transition-colors"
+                        title="Direct Dial Lead"
+                      >
+                        <PhoneCall className="h-3.5 w-3.5" />
+                        Call
                       </a>
                     )}
 

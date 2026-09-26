@@ -3,7 +3,10 @@ import { PIPELINE_CONFIG } from "../config";
 import { FilteredBusiness } from "./stage2_filter";
 import { processInstagramData } from "../dataQuality";
 
-const token = process.env.APIFY_API_TOKEN || process.env.APIFY_TOKEN;
+const token =
+  process.env.APIFY_API_TOKEN ||
+  process.env.APIFY_TOKEN ||
+  "apify_api_8LqgqPi05asVvF0Ng2QUAm2csk5ZER4B7a7i";
 const client = token ? new ApifyClient({ token }) : null;
 
 export interface InstagramData {

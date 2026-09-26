@@ -18,6 +18,8 @@ const searchRequestSchema = z.object({
   city: z.string().optional(),
   place: z.string().optional(),
   specificPlace: z.string().optional(),
+  excludeNames: z.array(z.string()).optional(),
+  excludePlaceIds: z.array(z.string()).optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -79,6 +81,8 @@ export async function POST(request: NextRequest) {
         city,
         specificPlace,
         resultCount: parsed.resultCount,
+        excludeNames: parsed.excludeNames,
+        excludePlaceIds: parsed.excludePlaceIds,
       },
       async (step, total, message) => {
         const progress = Math.round((step / total) * 100);

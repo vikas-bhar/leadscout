@@ -12,10 +12,21 @@ export type UrgencyLevel = "low" | "medium" | "high" | "critical";
 export type SearchStatus = "pending" | "running" | "completed" | "failed";
 export type LeadStatus = "new" | "viewed" | "contacted" | "won" | "lost";
 export type CreditType = "purchase" | "usage" | "refund" | "bonus";
-export type PitchStyle = "instagram_dm" | "email" | "whatsapp";
+export type PitchStyle = "instagram_dm" | "email" | "whatsapp" | "phone_script";
 export type PitchSendTime = "morning" | "afternoon" | "evening";
 export type ResponseRate = "low" | "medium" | "high";
 export type GapSeverity = "low" | "medium" | "high";
+
+export const FREELANCER_TYPES: FreelancerType[] = [
+  "social_media_manager",
+  "web_designer",
+  "graphic_designer",
+  "copywriter",
+  "video_editor",
+  "photographer",
+  "seo_specialist",
+  "virtual_assistant",
+];
 
 export const FREELANCER_TYPE_LABELS: Record<FreelancerType, string> = {
   social_media_manager: "Social Media Manager",
@@ -224,6 +235,15 @@ export function getTagStyle(tag: string): TagStyle {
   };
 }
 
+export interface LeadFolder {
+  id: string;
+  name: string;
+  color?: string;
+  icon?: string;
+  description?: string;
+  createdAt: string;
+}
+
 export interface Lead {
   id: string;
   searchId: string;
@@ -255,6 +275,8 @@ export interface Lead {
   buyingSignals: string[];
   pitches: PitchBundle;
   estimatedBudget: string | null;
+  folderId?: string | null;
+  folderName?: string | null;
   status: LeadStatus;
   notes: string | null;
   tags?: string[];

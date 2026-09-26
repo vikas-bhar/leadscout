@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
-import { History, Search, ArrowRight, Clock } from "lucide-react";
+import { History, Search, ArrowRight, Clock, X, RotateCcw } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { getLocalSearches, type StoredSearch } from "@/lib/local-store";
@@ -13,6 +13,8 @@ interface HistoryViewProps {
 
 export function HistoryView({ initialSearches }: HistoryViewProps) {
   const [list, setList] = useState<StoredSearch[]>(initialSearches);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [timeFilter, setTimeFilter] = useState<"all" | "today" | "7d" | "30d">("all");
 
   useEffect(() => {
     if (initialSearches.length > 0) {
@@ -25,13 +27,36 @@ export function HistoryView({ initialSearches }: HistoryViewProps) {
     }
   }, [initialSearches]);
 
+  const filteredSearches = useMemo(() => {
+    return list.filter((item) => {
+      // 1. Time Filter
+      if (timeFilter !== "all" && item.created_at) {
+        const itemTime = new Date(item.created_at).getTime();
+        const now = Date.now();
+        if (timeFilter === "today" && now - itemTime > 24 * 60 * 60 * 1000) return false;
+        if (timeFilter === "7d" && now - itemTime > 7 * 24 * 60 * 60 * 1000) return false;
+        if (timeFilter === "30d" && now - itemTime > 30 * 24 * 60 * 60 * 1000) return false;
+      }
+
+      // 2. Keyword Filter
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim();
+        const matchesType = (item.business_type || "").toLowerCase().includes(q);
+        const matchesLoc = (item.location || "").toLowerCase().includes(q);
+        return matchesType || matchesLoc;
+      }
+
+      return true;
+    });
+  }, [list, timeFilter, searchQuery]);
+
   return (
     <div className="max-w-5xl mx-auto space-y-6 pb-12">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-medium tracking-tight text-neutral-900">Search History</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Review past discovery runs, targets, and credit usage.
+            Review past discovery runs, targets, timeframes, and credit usage.
           </p>
         </div>
         <Link href="/search">
@@ -41,6 +66,63 @@ export function HistoryView({ initialSearches }: HistoryViewProps) {
           </Button>
         </Link>
       </div>
+
+      {list.length > 0 && (
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white p-3 rounded-xl border border-neutral-200">
+          <div className="flex flex-1 items-center gap-2 max-w-lg">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-neutral-400" />
+              <input
+                type="text"
+                placeholder="Search history by category or location..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-8 pr-7 h-8 rounded-lg border border-neutral-200 bg-neutral-50 text-xs text-neutral-900 focus:outline-none focus:ring-1 focus:ring-primary placeholder:text-neutral-400"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              )}
+            </div>
+
+            {/* Time Filter Select */}
+            <select
+              value={timeFilter}
+              onChange={(e) => setTimeFilter(e.target.value as typeof timeFilter)}
+              className="h-8 px-2.5 rounded-lg border border-neutral-200 bg-white text-xs text-neutral-700 font-medium focus:outline-none focus:ring-1 focus:ring-primary shrink-0"
+            >
+              <option value="all">🕒 All Time</option>
+              <option value="today">🕒 Last 24 Hours</option>
+              <option value="7d">🕒 Past 7 Days</option>
+              <option value="30d">🕒 Past 30 Days</option>
+            </select>
+          </div>
+
+          <div className="flex items-center gap-3 text-xs text-neutral-500">
+            {(timeFilter !== "all" || searchQuery) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setTimeFilter("all");
+                  setSearchQuery("");
+                }}
+                className="inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
+              >
+                <RotateCcw className="h-3 w-3" />
+                Reset
+              </button>
+            )}
+            <span>
+              Showing <strong>{filteredSearches.length}</strong> of {list.length} searches
+            </span>
+          </div>
+        </div>
+      )}
 
       {list.length === 0 ? (
         <Card className="border border-neutral-200/80 shadow-sm p-12 text-center space-y-4">
@@ -62,9 +144,28 @@ export function HistoryView({ initialSearches }: HistoryViewProps) {
             </Link>
           </div>
         </Card>
+      ) : filteredSearches.length === 0 ? (
+        <div className="p-8 text-center bg-white rounded-xl border border-neutral-200 space-y-2">
+          <div className="h-10 w-10 mx-auto rounded-full bg-neutral-100 flex items-center justify-center text-neutral-400">
+            <Clock className="h-5 w-5" />
+          </div>
+          <p className="text-sm font-semibold text-neutral-800">No search runs match this timeframe or query</p>
+          <p className="text-xs text-neutral-500">Try changing the time filter to &quot;All Time&quot; or clearing your search term.</p>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              setTimeFilter("all");
+              setSearchQuery("");
+            }}
+            className="text-xs mt-2"
+          >
+            Clear Filters
+          </Button>
+        </div>
       ) : (
         <div className="space-y-3">
-          {list.map((item) => {
+          {filteredSearches.map((item) => {
             const dateStr = item.created_at
               ? new Date(item.created_at).toLocaleDateString("en-US", {
                   month: "short",
@@ -92,7 +193,7 @@ export function HistoryView({ initialSearches }: HistoryViewProps) {
                     </div>
 
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-neutral-500">
-                      <span className="flex items-center gap-1">
+                      <span className="flex items-center gap-1 font-medium text-neutral-700">
                         <Clock className="h-3.5 w-3.5 text-neutral-400" />
                         {dateStr}
                       </span>

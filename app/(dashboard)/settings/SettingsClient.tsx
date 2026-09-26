@@ -1,28 +1,43 @@
 "use client";
 
 import { useState } from "react";
-import { Mail, User, Info, CheckCircle2, Sparkles, Cpu } from "lucide-react";
+import { Mail, User, Info, CheckCircle2, Sparkles, Cpu, UserCheck } from "lucide-react";
 import { TemplatesManager } from "@/components/settings/TemplatesManager";
 import { FreelancerProfileForm } from "@/components/settings/FreelancerProfileForm";
+import { AccountManager } from "@/components/settings/AccountManager";
 import { McpIntegrationHub } from "@/components/settings/McpIntegrationHub";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
 export function SettingsClient() {
-  const [activeTab, setActiveTab] = useState<"templates" | "profile" | "mcp" | "guide">("templates");
+  const [activeTab, setActiveTab] = useState<"accounts" | "templates" | "profile" | "mcp" | "guide">("accounts");
 
   return (
     <div className="max-w-6xl mx-auto space-y-6 pb-16">
       {/* Page Header */}
       <div>
-        <h1 className="text-xl font-bold text-neutral-900 tracking-tight">Settings & Outreach Automation</h1>
+        <h1 className="text-xl font-bold text-neutral-900 tracking-tight">Account & Prospecting Settings</h1>
         <p className="text-xs text-neutral-500 mt-1">
-          Configure customizable outreach email templates, variables, signature, and Model Context Protocol (MCP) integrations.
+          Manage user accounts, client profiles, customizable outreach email templates, variables, and Model Context Protocol (MCP) integrations.
         </p>
       </div>
 
       {/* Tabs Header */}
       <div className="flex border-b border-neutral-200 gap-6 overflow-x-auto">
+        <button
+          type="button"
+          onClick={() => setActiveTab("accounts")}
+          className={cn(
+            "pb-3 text-xs font-semibold border-b-2 transition-colors flex items-center gap-1.5 whitespace-nowrap",
+            activeTab === "accounts"
+              ? "border-primary text-primary font-bold"
+              : "border-transparent text-neutral-500 hover:text-neutral-800"
+          )}
+        >
+          <UserCheck className="h-3.5 w-3.5" />
+          Accounts & Team Profiles
+        </button>
+
         <button
           type="button"
           onClick={() => setActiveTab("templates")}
@@ -34,7 +49,7 @@ export function SettingsClient() {
           )}
         >
           <Mail className="h-3.5 w-3.5" />
-          Outreach Templates Library
+          Outreach Templates
         </button>
 
         <button
@@ -48,7 +63,7 @@ export function SettingsClient() {
           )}
         >
           <User className="h-3.5 w-3.5" />
-          Freelancer Profile & Signature
+          Pitch Signature
         </button>
 
         <button
@@ -62,7 +77,7 @@ export function SettingsClient() {
           )}
         >
           <Cpu className="h-3.5 w-3.5 text-indigo-500" />
-          MCP Tool & Agent Server
+          MCP Tool Server
         </button>
 
         <button
@@ -76,11 +91,13 @@ export function SettingsClient() {
           )}
         >
           <Info className="h-3.5 w-3.5" />
-          Cold Outreach Playbook
+          Outreach Playbook
         </button>
       </div>
 
       {/* Tab Content */}
+      {activeTab === "accounts" && <AccountManager />}
+
       {activeTab === "templates" && <TemplatesManager />}
 
       {activeTab === "profile" && <FreelancerProfileForm />}

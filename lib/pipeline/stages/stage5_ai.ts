@@ -19,6 +19,7 @@ export interface AIAnalysis {
     impact: string;
     severity: "low" | "medium" | "high";
     yourSolution: string;
+    estimatedRevenueImpact?: string;
   }>;
   strengthsFound: string[];
   competitorGap: string;

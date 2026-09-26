@@ -20,7 +20,7 @@ export interface PitchInput {
 
 export interface PitchOutput {
   pitches: Array<{
-    style: "instagram_dm" | "email" | "whatsapp";
+    style: "instagram_dm" | "email" | "whatsapp" | "phone_script";
     tone: string;
     subject: string | null;
     message: string;
@@ -28,6 +28,8 @@ export interface PitchOutput {
     expectedResponseRate: "low" | "medium" | "high";
   }>;
   followUpMessage: string;
+  secondFollowUpMessage?: string;
+  coldCallScript?: string;
   pitchTips: string[];
 }
 
@@ -37,81 +39,94 @@ export async function generatePitchWithGemini(
   const model = getCreativeModel();
 
   const prompt = `
-Write 3 outreach messages for this specific opportunity.
-Each must feel personally written, not templated.
+You are a top 0.1% cold outreach copywriter and freelance sales engineer.
+Write 4 hyper-converting, authentic outreach pitches for this opportunity.
 
 ══════════════════════════════════
-BUSINESS INTEL
+PROSPECT DATA & SIGNALS
 ══════════════════════════════════
-Business       : ${input.businessName}
+Business Name  : ${input.businessName}
 Category       : ${input.category}
-City           : ${input.city}
-Google Rating  : ${input.rating}/5 (${input.reviewCount} reviews)
-Has Website    : ${input.hasWebsite ? "YES" : "NO"}
-Instagram      : ${input.instagramHandle ? "@" + input.instagramHandle + " (" + input.followers?.toLocaleString() + " followers)" : "None found"}
-Last Post      : ${input.daysSinceLastPost ? input.daysSinceLastPost + " days ago" : "N/A"}
-Engagement     : ${input.engagementRate ? input.engagementRate + "%" : "N/A"}
+City / Area    : ${input.city}
+Google Rating  : ${input.rating ? `${input.rating}★ with ${input.reviewCount} reviews` : "Unrated"}
+Has Website    : ${input.hasWebsite ? "YES" : "NO (Huge website opportunity)"}
+Instagram      : ${input.instagramHandle ? "@" + input.instagramHandle + " (" + (input.followers ? input.followers.toLocaleString() : "0") + " followers)" : "None active"}
+Days Since Post: ${input.daysSinceLastPost ? `${input.daysSinceLastPost} days ago` : "N/A"}
+Engagement     : ${input.engagementRate ? `${input.engagementRate}%` : "N/A"}
 
 ══════════════════════════════════
-PITCH STRATEGY
+OPPORTUNITY INTEL
 ══════════════════════════════════
-Primary Gap    : ${input.primaryGap}
-Hook           : ${input.hookStatement}
-Pitch Angle    : ${input.pitchAngle}
-
-══════════════════════════════════
-FREELANCER
-══════════════════════════════════
-Type   : ${input.freelancerType}
-Skills : ${input.freelancerSkills.join(", ")}
+Primary Bottleneck : ${input.primaryGap}
+Hook Statement     : ${input.hookStatement}
+Angle to Exploit   : ${input.pitchAngle}
+Freelancer Service : ${input.freelancerType} (${input.freelancerSkills.join(", ")})
 
 ══════════════════════════════════
-WRITING RULES — FOLLOW EXACTLY
+COPYWRITING RULES (STRICT COMPLIANCE)
 ══════════════════════════════════
+1. BAN LIST: NEVER use: "I noticed", "I came across", "Hope you're well", "My name is", "I am a freelancer", "Let's connect", "Synergy".
+2. INSTAGRAM DM:
+   - Max 3–4 sentences.
+   - Start with a genuine, hyper-specific compliment or observation on their actual local standing or reviews.
+   - Reveal the single biggest revenue leak (${input.primaryGap}).
+   - Low-friction, easy YES/NO question offering 2 free concepts or a 45-second Loom breakdown.
+3. COLD EMAIL:
+   - Subject line: 3–6 words, ultra-curiosity or specific metric (e.g., "${input.businessName} + 15 extra bookings this month", "question about ${input.businessName}'s mobile bookings").
+   - Max 5-6 sentences. Open with an exact observation about their business.
+   - Mention the quantified impact.
+   - Close with low-commitment CTA (e.g., "Mind if I send over the 2-minute video breakdown?").
+4. WHATSAPP / SMS:
+   - 2–3 sentences max. Direct, mobile-formatted, friendly.
+   - Reference an exact number (${input.reviewCount} reviews, rating, or days since last post).
+5. PHONE / VOICEMAIL SCRIPT:
+   - 20-30 second conversational script for a quick discovery call or voicemail.
+   - Pattern interrupt opener + specific gap + value offer.
+6. FOLLOW-UP NUDGE:
+   - Polite, value-added 48-hour follow up.
 
-INSTAGRAM DM (max 4 sentences):
-  ✅ Start with a specific compliment or observation
-  ✅ Mention one exact metric (${input.followers ? input.followers.toLocaleString() + " followers" : "recent review rating"})
-  ✅ Connect the gap to their lost revenue / bookings
-  ✅ End with easy yes/no question
-  ❌ Never start with "Hi I am..."
-  ❌ Never say "I noticed" or "I came across"
-  ❌ Never use "hope this finds you well"
-
-EMAIL (max 6 sentences, needs subject line):
-  ✅ Subject: specific, curiosity-driven, under 8 words
-  ✅ Open with their specific situation
-  ✅ One social proof line (result you got for similar client)
-  ✅ Clear simple ask
-  ❌ No long intros
-
-WHATSAPP (2-3 sentences max):
-  ✅ Ultra direct
-  ✅ Include one specific number from their data
-  ✅ Immediate value offer
-  ✅ Simple question to respond to
-
-ALL THREE:
-  ✅ Sound like a real human texted/emailed this
-  ✅ Reference their actual business name: ${input.businessName}
-  ✅ Reference their actual city: ${input.city}
-
-Return JSON with schema:
+Return pure JSON matching:
 {
   "pitches": [
     {
-      "style": "instagram_dm" | "email" | "whatsapp",
-      "tone": "Direct & value-first" | "Warm executive" | "Conversational",
-      "subject": string | null,
+      "style": "instagram_dm",
+      "tone": "Casual & High Response",
+      "subject": null,
       "message": "string",
-      "bestTimeToSend": "morning" | "afternoon" | "evening",
-      "expectedResponseRate": "low" | "medium" | "high"
+      "bestTimeToSend": "afternoon",
+      "expectedResponseRate": "high"
+    },
+    {
+      "style": "email",
+      "tone": "Warm Executive / Direct ROI",
+      "subject": "string",
+      "message": "string",
+      "bestTimeToSend": "morning",
+      "expectedResponseRate": "high"
+    },
+    {
+      "style": "whatsapp",
+      "tone": "Direct & Punchy",
+      "subject": null,
+      "message": "string",
+      "bestTimeToSend": "afternoon",
+      "expectedResponseRate": "high"
+    },
+    {
+      "style": "phone_script",
+      "tone": "Confident & Conversational",
+      "subject": null,
+      "message": "string",
+      "bestTimeToSend": "morning",
+      "expectedResponseRate": "medium"
     }
   ],
   "followUpMessage": "string",
-  "pitchTips": ["string"]
+  "secondFollowUpMessage": "string",
+  "coldCallScript": "string",
+  "pitchTips": ["Tip 1", "Tip 2", "Tip 3"]
 }
-  `;
+`;
 
   try {
     return await generateJSON<PitchOutput>(model, prompt);

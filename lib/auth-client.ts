@@ -54,6 +54,21 @@ const DEFAULT_ACCOUNTS: UserAccount[] = [
   },
 ];
 
+function syncAuthCookies(user: UserAccount | null): void {
+  if (typeof document === "undefined") return;
+  try {
+    if (user) {
+      document.cookie = `ff_auth_session=${encodeURIComponent(user.id)}; path=/; max-age=31536000; SameSite=Lax`;
+      document.cookie = `ff_auth_user=${encodeURIComponent(JSON.stringify(user))}; path=/; max-age=31536000; SameSite=Lax`;
+    } else {
+      document.cookie = `ff_auth_session=; path=/; max-age=0; SameSite=Lax`;
+      document.cookie = `ff_auth_user=; path=/; max-age=0; SameSite=Lax`;
+    }
+  } catch {
+    // Ignore cookie errors
+  }
+}
+
 export function getAllAccounts(): UserAccount[] {
   if (typeof window === "undefined") return DEFAULT_ACCOUNTS;
   try {
@@ -91,7 +106,10 @@ export function getActiveUser(): UserAccount {
     const activeId = localStorage.getItem(ACTIVE_USER_ID_KEY);
     if (activeId) {
       const match = accounts.find((a) => a.id === activeId);
-      if (match) return match;
+      if (match) {
+        syncAuthCookies(match);
+        return match;
+      }
     }
   } catch {
     // Ignore storage errors
@@ -100,6 +118,7 @@ export function getActiveUser(): UserAccount {
   const fallback = accounts[0] || DEFAULT_ACCOUNTS[0];
   try {
     localStorage.setItem(ACTIVE_USER_ID_KEY, fallback.id);
+    syncAuthCookies(fallback);
   } catch {
     // Ignore
   }
@@ -110,6 +129,7 @@ export function setActiveUser(user: UserAccount): void {
   if (typeof window === "undefined") return;
   try {
     localStorage.setItem(ACTIVE_USER_ID_KEY, user.id);
+    syncAuthCookies(user);
     const accounts = getAllAccounts();
     const existingIdx = accounts.findIndex((a) => a.id === user.id);
     if (existingIdx !== -1) {
@@ -273,6 +293,7 @@ export async function logoutUser(): Promise<void> {
   if (typeof window !== "undefined") {
     try {
       localStorage.removeItem(ACTIVE_USER_ID_KEY);
+      syncAuthCookies(null);
       window.dispatchEvent(new Event("freelancefind_user_updated"));
     } catch {
       // Ignore

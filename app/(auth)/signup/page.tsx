@@ -2,7 +2,6 @@
 
 import { FormEvent, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Compass, ArrowRight, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -13,7 +12,6 @@ import { signUpUser } from "@/lib/auth-client";
 import { FREELANCER_TYPES, FREELANCER_TYPE_LABELS, type FreelancerType } from "@/types";
 
 export default function SignupPage() {
-  const router = useRouter();
   const [fullName, setFullName] = useState("");
   const [agencyName, setAgencyName] = useState("");
   const [freelancerType, setFreelancerType] = useState<FreelancerType>("web_designer");
@@ -33,8 +31,7 @@ export default function SignupPage() {
       const res = await signUpUser(email, fullName, agencyName, freelancerType);
       if (res.success) {
         toast.success(`Account created! Welcome to FreelanceFind, ${fullName}.`);
-        router.push("/search");
-        router.refresh();
+        window.location.href = "/search";
       } else {
         toast.error(res.error || "Signup failed");
       }

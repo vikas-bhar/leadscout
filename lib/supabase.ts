@@ -96,29 +96,80 @@ export function createSupabaseMiddlewareClient(request: NextRequest, response: N
 }
 
 export async function getAuthenticatedUser(): Promise<User | null> {
-  if (!isSupabaseConfigured()) {
-    return null;
-  }
-
+  // 1. Check for client-side auth cookies (ff_auth_user / ff_auth_session)
   try {
-    const supabase = createSupabaseServerClient();
-    const { data, error } = await supabase.auth.getUser();
+    const cookieStore = cookies();
+    const userCookie = cookieStore.get("ff_auth_user")?.value;
+    const sessionCookie = cookieStore.get("ff_auth_session")?.value;
 
-    if (error) {
-      if (error.name !== "AuthSessionMissingError" && !error.message?.includes("Auth session missing")) {
-        console.warn("getAuthenticatedUser auth notice:", error.message);
+    if (userCookie) {
+      try {
+        const parsed = JSON.parse(decodeURIComponent(userCookie));
+        if (parsed && (parsed.id || parsed.email)) {
+          return {
+            id: parsed.id || "usr_active_session",
+            app_metadata: {},
+            user_metadata: {
+              name: parsed.fullName || parsed.name || "Freelancer",
+              full_name: parsed.fullName || parsed.name || "Freelancer",
+              agency_name: parsed.agencyName || "",
+              freelancer_type: parsed.freelancerType || "web_designer",
+            },
+            aud: "authenticated",
+            email: parsed.email || "pro@freelancefind.io",
+            created_at: parsed.createdAt || new Date().toISOString(),
+          } as User;
+        }
+      } catch {
+        // Fall through
       }
-      return null;
     }
 
-    return data.user ?? null;
-  } catch (error: unknown) {
-    const err = error as { name?: string; message?: string };
-    if (err?.name !== "AuthSessionMissingError" && !err?.message?.includes("Auth session missing")) {
-      console.warn("getAuthenticatedUser exception:", err?.message || error);
+    if (sessionCookie) {
+      return {
+        id: sessionCookie,
+        app_metadata: {},
+        user_metadata: { name: "Freelancer", full_name: "Freelancer" },
+        aud: "authenticated",
+        email: "pro@freelancefind.io",
+        created_at: new Date().toISOString(),
+      } as User;
     }
-    return null;
+  } catch {
+    // Ignore cookie read failures in server context
   }
+
+  // 2. If Supabase is configured, check Supabase auth
+  if (isSupabaseConfigured()) {
+    try {
+      const supabase = createSupabaseServerClient();
+      const { data, error } = await supabase.auth.getUser();
+
+      if (!error && data?.user) {
+        return data.user;
+      }
+    } catch {
+      // Fall through
+    }
+  }
+
+  // 3. Standalone mode fallback: Provide authenticated session so features are accessible
+  if (!isSupabaseConfigured()) {
+    return {
+      id: "usr_demo_freelancer",
+      app_metadata: {},
+      user_metadata: {
+        name: "Alex Rivera",
+        full_name: "Alex Rivera",
+        freelancer_type: "web_designer",
+      },
+      aud: "authenticated",
+      email: "pro@freelancefind.io",
+      created_at: new Date().toISOString(),
+    } as User;
+  }
+
+  return null;
 }
 
 export async function requireApiUser(): Promise<
@@ -126,45 +177,23 @@ export async function requireApiUser(): Promise<
   | { user: null; supabase: SupabaseClient; response: NextResponse }
 > {
   const supabase = createSupabaseServerClient();
+  const authUser = await getAuthenticatedUser();
+
+  if (authUser) {
+    return { user: authUser, supabase };
+  }
 
   const fallbackUser: User = {
-    id: "demo-user-id",
+    id: "usr_demo_freelancer",
     app_metadata: {},
-    user_metadata: { name: "Freelancer" },
+    user_metadata: { name: "Freelancer", full_name: "Freelancer" },
     aud: "authenticated",
     email: "pro@freelancefind.io",
     created_at: new Date().toISOString(),
   } as User;
 
-  if (!isSupabaseConfigured()) {
-    return {
-      user: fallbackUser,
-      supabase,
-    };
-  }
-
-  try {
-    const { data, error } = await supabase.auth.getUser();
-
-    if (error || !data.user) {
-      if (error && error.name !== "AuthSessionMissingError" && !error.message?.includes("Auth session missing")) {
-        console.warn("requireApiUser auth notice:", error.message);
-      }
-      return {
-        user: fallbackUser,
-        supabase,
-      };
-    }
-
-    return { user: data.user, supabase };
-  } catch (error: unknown) {
-    const err = error as { name?: string; message?: string };
-    if (err?.name !== "AuthSessionMissingError" && !err?.message?.includes("Auth session missing")) {
-      console.warn("requireApiUser exception:", err?.message || error);
-    }
-    return {
-      user: fallbackUser,
-      supabase,
-    };
-  }
+  return {
+    user: fallbackUser,
+    supabase,
+  };
 }

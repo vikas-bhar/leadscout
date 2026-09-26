@@ -2,7 +2,7 @@
 
 import { FormEvent, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { Compass, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -12,7 +12,6 @@ import { Card } from "@/components/ui/card";
 import { loginUser } from "@/lib/auth-client";
 
 export default function LoginForm() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const nextPath = searchParams.get("next") || "/";
   const [email, setEmail] = useState("");
@@ -36,8 +35,7 @@ export default function LoginForm() {
       const res = await loginUser(email, password);
       if (res.success) {
         toast.success(`Signed in successfully!`);
-        router.push(nextPath);
-        router.refresh();
+        window.location.href = nextPath;
       } else {
         toast.error(res.error || "Login failed");
       }

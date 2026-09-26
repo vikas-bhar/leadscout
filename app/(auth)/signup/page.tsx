@@ -19,18 +19,24 @@ export default function SignupPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
-  async function onSubmit(event: FormEvent) {
+  async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!fullName.trim() || !email.trim()) {
+    const formData = new FormData(event.currentTarget);
+    const targetFullName = ((formData.get("fullName") as string) || fullName || "").trim();
+    const targetAgencyName = ((formData.get("agencyName") as string) || agencyName || "").trim();
+    const targetType = ((formData.get("freelancerType") as string) || freelancerType) as FreelancerType;
+    const targetEmail = ((formData.get("email") as string) || email || "").trim();
+
+    if (!targetFullName || !targetEmail) {
       toast.error("Please enter your name and email");
       return;
     }
 
     setLoading(true);
     try {
-      const res = await signUpUser(email, fullName, agencyName, freelancerType);
+      const res = await signUpUser(targetEmail, targetFullName, targetAgencyName, targetType);
       if (res.success) {
-        toast.success(`Account created! Welcome to FreelanceFind, ${fullName}.`);
+        toast.success(`Account created! Welcome to FreelanceFind, ${targetFullName}.`);
         window.location.href = "/search";
       } else {
         toast.error(res.error || "Signup failed");
@@ -62,6 +68,7 @@ export default function SignupPage() {
             </Label>
             <Input
               id="fullName"
+              name="fullName"
               required
               placeholder="e.g. Sarah Connor"
               value={fullName}
@@ -77,6 +84,7 @@ export default function SignupPage() {
             </Label>
             <Input
               id="agencyName"
+              name="agencyName"
               placeholder="e.g. Connor Design Co."
               value={agencyName}
               onChange={(event) => setAgencyName(event.target.value)}
@@ -91,6 +99,7 @@ export default function SignupPage() {
             </Label>
             <select
               id="freelancerType"
+              name="freelancerType"
               value={freelancerType}
               onChange={(e) => setFreelancerType(e.target.value as FreelancerType)}
               className="w-full h-9 rounded-lg border border-neutral-200 bg-white px-3 text-xs text-neutral-800 font-medium focus:outline-none focus:ring-1 focus:ring-primary"
@@ -109,6 +118,7 @@ export default function SignupPage() {
             </Label>
             <Input
               id="email"
+              name="email"
               type="email"
               required
               autoComplete="email"
@@ -126,6 +136,7 @@ export default function SignupPage() {
             </Label>
             <Input
               id="password"
+              name="password"
               type="password"
               autoComplete="new-password"
               placeholder="Create a secure password"

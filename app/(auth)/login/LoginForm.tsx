@@ -13,7 +13,9 @@ import { loginUser } from "@/lib/auth-client";
 
 export default function LoginForm() {
   const searchParams = useSearchParams();
-  const nextPath = searchParams.get("next") || "/";
+  const rawNext = searchParams.get("next") || "/";
+  const nextPath = rawNext === "/login" || rawNext === "/signup" ? "/" : rawNext;
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -23,16 +25,20 @@ export default function LoginForm() {
     []
   );
 
-  async function onSubmit(event: FormEvent) {
+  async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!email.trim()) {
+    const formData = new FormData(event.currentTarget);
+    const targetEmail = ((formData.get("email") as string) || email || "").trim();
+    const targetPassword = ((formData.get("password") as string) || password || "").trim();
+
+    if (!targetEmail) {
       toast.error("Please enter your email address");
       return;
     }
 
     setLoading(true);
     try {
-      const res = await loginUser(email, password);
+      const res = await loginUser(targetEmail, targetPassword);
       if (res.success) {
         toast.success(`Signed in successfully!`);
         window.location.href = nextPath;
@@ -66,6 +72,7 @@ export default function LoginForm() {
             </Label>
             <Input
               id="email"
+              name="email"
               type="email"
               required
               autoComplete="email"
@@ -86,6 +93,7 @@ export default function LoginForm() {
             </div>
             <Input
               id="password"
+              name="password"
               type="password"
               autoComplete="current-password"
               placeholder="••••••••"

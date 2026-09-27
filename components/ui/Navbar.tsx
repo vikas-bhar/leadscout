@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, useRef } from "react";
 import {
@@ -149,7 +150,7 @@ export function Navbar() {
             >
               <div className="h-7 w-7 rounded-full bg-primary/10 text-primary font-bold flex items-center justify-center text-xs overflow-hidden border border-primary/20 shrink-0">
                 {currentUser?.avatarUrl ? (
-                  <img src={currentUser.avatarUrl} alt={currentUser.fullName} className="h-full w-full object-cover" />
+                  <Image src={currentUser.avatarUrl} alt={currentUser.fullName} width={28} height={28} className="h-full w-full object-cover" referrerPolicy="no-referrer" />
                 ) : (
                   currentUser?.fullName?.charAt(0) || "U"
                 )}

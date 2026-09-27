@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Image from "next/image";
 import {
   User,
   Plus,
@@ -258,7 +259,7 @@ export function AccountManager() {
                 <div className="flex items-start gap-3">
                   <div className="h-10 w-10 rounded-full bg-primary/10 text-primary font-bold flex items-center justify-center shrink-0 text-sm overflow-hidden border border-primary/20">
                     {acc.avatarUrl ? (
-                      <img src={acc.avatarUrl} alt={acc.fullName} className="h-full w-full object-cover" />
+                      <Image src={acc.avatarUrl} alt={acc.fullName} width={40} height={40} className="h-full w-full object-cover" referrerPolicy="no-referrer" />
                     ) : (
                       acc.fullName.charAt(0)
                     )}
@@ -339,7 +340,7 @@ export function AccountManager() {
                     selectedAvatar === url ? "border-primary ring-2 ring-primary/30" : "border-transparent opacity-70 hover:opacity-100"
                   )}
                 >
-                  <img src={url} alt="Avatar" className="h-full w-full object-cover rounded-full" />
+                  <Image src={url} alt="Avatar" width={44} height={44} className="h-full w-full object-cover rounded-full" referrerPolicy="no-referrer" />
                 </button>
               ))}
             </div>

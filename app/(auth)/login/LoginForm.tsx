@@ -20,23 +20,6 @@ export default function LoginForm() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
-  async function handleDemoLogin() {
-    setLoading(true);
-    try {
-      const res = await loginUser("pro@freelancefind.io", "demo123");
-      if (res.success) {
-        toast.success("Signed in with demo account!");
-        window.location.href = "/search";
-      } else {
-        toast.error("Demo login failed");
-      }
-    } catch {
-      toast.error("An error occurred");
-    } finally {
-      setLoading(false);
-    }
-  }
-
   const subtitle = useMemo(
     () => "Sign in to find high-opportunity client leads with digital gaps and tailored outreach pitches.",
     []
@@ -82,24 +65,7 @@ export default function LoginForm() {
           </div>
         </div>
 
-        <div className="space-y-4">
-          <Button 
-            type="button" 
-            variant="outline" 
-            className="w-full h-9 text-xs font-semibold bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
-            onClick={handleDemoLogin}
-            disabled={loading}
-          >
-            ⚡ Demo Sign In (1-Click Instant Access)
-          </Button>
-
-          <div className="relative flex py-1 items-center">
-            <div className="flex-grow border-t border-neutral-200"></div>
-            <span className="flex-shrink mx-4 text-[10px] uppercase text-neutral-400 font-medium">or sign in with email</span>
-            <div className="flex-grow border-t border-neutral-200"></div>
-          </div>
-
-          <form onSubmit={onSubmit} className="space-y-4">
+        <form onSubmit={onSubmit} className="space-y-4">
           <div className="space-y-1.5">
             <Label htmlFor="email" className="text-xs font-semibold text-neutral-700">
               Email Address
@@ -142,7 +108,6 @@ export default function LoginForm() {
             {loading ? "Signing in..." : "Sign in to Dashboard"}
           </Button>
         </form>
-        </div>
 
         <div className="pt-2 border-t border-neutral-100 flex items-center justify-between text-xs text-neutral-500">
           <span>Need a new account?</span>

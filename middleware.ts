@@ -1,11 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseMiddlewareClient, isSupabaseConfigured } from "@/lib/supabase";
 
-const PUBLIC_PATHS = new Set(["/login", "/signup"]);
+const PUBLIC_PATHS = new Set([
+  "/",
+  "/login",
+  "/signup",
+  "/pricing",
+  "/features",
+  "/onboarding",
+  "/payment/success",
+  "/payment/cancelled",
+  "/manifest.json",
+  "/robots.txt",
+  "/sitemap.xml",
+]);
 
 function isPublicPath(pathname: string) {
   if (PUBLIC_PATHS.has(pathname)) return true;
   if (pathname.startsWith("/api/webhooks/stripe")) return true;
+  if (pathname.startsWith("/og")) return true;
+  if (pathname.startsWith("/payment/")) return true;
   return false;
 }
 
@@ -18,12 +32,14 @@ export async function middleware(request: NextRequest) {
     Boolean(request.cookies.get("ff_auth_session")?.value) ||
     Boolean(request.cookies.get("ff_auth_user")?.value);
 
-  // If authenticated via local session cookie
+  // If authenticated via local session cookie and visiting auth pages
   if (hasLocalSession) {
     if (pathname === "/login" || pathname === "/signup") {
       const nextParam = request.nextUrl.searchParams.get("next");
       const targetPath =
-        nextParam && nextParam.startsWith("/") && !nextParam.startsWith("//") ? nextParam : "/";
+        nextParam && nextParam.startsWith("/") && !nextParam.startsWith("//") && nextParam !== "/" && nextParam !== "/login" && nextParam !== "/signup"
+          ? nextParam
+          : "/search";
       const redirectUrl = request.nextUrl.clone();
       redirectUrl.pathname = targetPath;
       redirectUrl.search = "";
@@ -49,7 +65,7 @@ export async function middleware(request: NextRequest) {
       if (user) {
         if (pathname === "/login" || pathname === "/signup") {
           const dashboardUrl = request.nextUrl.clone();
-          dashboardUrl.pathname = "/";
+          dashboardUrl.pathname = "/search";
           dashboardUrl.search = "";
           return NextResponse.redirect(dashboardUrl);
         }

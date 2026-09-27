@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { getAuthenticatedUser, createSupabaseServerClient } from "@/lib/supabase";
 import { getCreditBalance } from "@/lib/credits";
-import { DashboardClient } from "./DashboardClient";
+import { DashboardClient } from "../DashboardClient";
 
 export const dynamic = "force-dynamic";
 

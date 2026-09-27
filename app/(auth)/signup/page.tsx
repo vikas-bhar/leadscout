@@ -36,8 +36,8 @@ export default function SignupPage() {
     try {
       const res = await signUpUser(targetEmail, targetFullName, targetAgencyName, targetType);
       if (res.success) {
-        toast.success(`Account created! Welcome to FreelanceFind, ${targetFullName}.`);
-        window.location.href = "/search";
+        toast.success(`Account created! Welcome to LeadScout, ${targetFullName}.`);
+        window.location.href = "/onboarding";
       } else {
         toast.error(res.error || "Signup failed");
       }

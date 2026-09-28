@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from "next/server";
 import { requireApiUser, createSupabaseServiceClient } from "@/lib/supabase";
 import { DEFAULT_FILTER_TEMPLATES } from "@/lib/customization/defaultTemplates";
@@ -24,17 +25,17 @@ export async function GET() {
       });
     }
 
-    const formatted: CustomFilterConfig[] = data.map((row: any) => ({
-      id: row.id,
-      name: row.name,
-      description: row.description || "",
-      mapsFilters: row.filters?.mapsFilters || row.scraping_config?.mapsFilters || {},
-      instagramFilters: row.filters?.instagramFilters || row.scraping_config?.instagramFilters || {},
-      scoringWeights: row.filters?.scoringWeights || {},
-      isActive: row.is_active,
-      isDefault: row.is_default,
-      usageCount: row.usage_count || 0,
-      createdAt: row.created_at,
+    const formatted: CustomFilterConfig[] = data.map((row: Record<string, unknown>) => ({
+      id: row.id as string,
+      name: row.name as string,
+      description: (row.description as string) || "",
+      mapsFilters: (row.filters as any)?.mapsFilters || (row.scraping_config as any)?.mapsFilters || {},
+      instagramFilters: (row.filters as any)?.instagramFilters || (row.scraping_config as any)?.instagramFilters || {},
+      scoringWeights: (row.filters as any)?.scoringWeights || {},
+      isActive: row.is_active as boolean,
+      isDefault: row.is_default as boolean,
+      usageCount: (row.usage_count as number) || 0,
+      createdAt: row.created_at as string,
     }));
 
     return NextResponse.json({
@@ -63,7 +64,7 @@ export async function POST(request: NextRequest) {
     const supabase = createSupabaseServiceClient();
     const filterId = body.id && !body.id.startsWith("filter_") ? body.id : undefined;
 
-    const payload: any = {
+    const payload: Record<string, unknown> = {
       user_id: auth.user.id,
       name: body.name.trim(),
       description: body.description?.trim() || null,
@@ -109,9 +110,10 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({ success: true, filter: data });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("POST /api/filters error:", err);
-    return NextResponse.json({ error: err.message || "Failed to save filter" }, { status: 500 });
+    const message = err instanceof Error ? err.message : "Failed to save filter";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 
@@ -130,7 +132,8 @@ export async function DELETE(request: NextRequest) {
     await supabase.from("custom_filters").delete().eq("id", id).eq("user_id", auth.user.id);
 
     return NextResponse.json({ success: true });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message || "Failed to delete" }, { status: 500 });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Failed to delete";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

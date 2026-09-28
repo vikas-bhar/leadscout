@@ -235,7 +235,7 @@ export async function deductUserCredits(params: {
 export async function addUserCredits(params: {
   userId: string;
   credits: number;
-  type: Extract<CreditType, "purchase" | "refund" | "bonus">;
+  type: CreditType;
   action: string;
   description: string;
   searchId?: string;

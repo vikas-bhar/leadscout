@@ -86,33 +86,38 @@ export interface CustomFilterConfig {
 }
 
 export interface RawInstagramData {
-  followerCount?: number;
-  followersCount?: number;
-  followers?: number;
-  engagementRate?: number;
-  lastPostDaysAgo?: number;
-  daysSinceLastPost?: number;
-  hasReels?: boolean;
-  hasLinkInBio?: boolean;
-  postsPerWeek?: number;
+  found?: boolean | null;
+  followerCount?: number | null;
+  followersCount?: number | null;
+  followers?: number | null;
+  engagementRate?: number | null;
+  lastPostDaysAgo?: number | null;
+  daysSinceLastPost?: number | null;
+  hasReels?: boolean | null;
+  hasLinkInBio?: boolean | null;
+  postsPerWeek?: number | null;
   [key: string]: unknown;
 }
 
 export interface RawBusinessData {
-  rating?: number;
-  reviewCount?: number;
-  reviewsCount?: number;
-  reviews_count?: number;
-  website?: string;
-  phone?: string;
-  photoCount?: number;
-  photos?: unknown[];
-  photosCount?: number;
-  photos_count?: number;
-  hasOwnerResponse?: boolean;
-  unansweredNegativeReviews?: number;
-  instagramData?: RawInstagramData;
-  instagram?: RawInstagramData;
+  name?: string | null;
+  rating?: number | null;
+  reviewCount?: number | null;
+  reviewsCount?: number | null;
+  reviews_count?: number | null;
+  website?: string | null;
+  phone?: string | null;
+  photoCount?: number | null;
+  photos?: unknown[] | null;
+  photosCount?: number | null;
+  photos_count?: number | null;
+  hasOwnerResponse?: boolean | null;
+  unansweredNegativeReviews?: number | null;
+  unansweredReviews?: number | null;
+  instagramData?: RawInstagramData | null;
+  instagram?: RawInstagramData | null;
+  isVerified?: boolean | null;
+  priceLevel?: string | null;
   [key: string]: unknown;
 }
 
@@ -202,7 +207,7 @@ export function applyCustomFilters<T extends RawBusinessData>(
 
     // Price level filter
     if (mf.priceLevel && mf.priceLevel.length > 0 && b.priceLevel) {
-      if (!mf.priceLevel.includes(b.priceLevel)) return false;
+      if (!mf.priceLevel.includes(b.priceLevel as never)) return false;
     }
 
     // Verified filter
@@ -226,7 +231,7 @@ export function applyCustomFilters<T extends RawBusinessData>(
     }
 
     // Unanswered reviews filter
-    const unanswered = b.unansweredNegativeReviews ?? b.unansweredReviews ?? 0;
+    const unanswered = Number(b.unansweredNegativeReviews ?? b.unansweredReviews ?? 0);
     if (mf.requireUnansweredReviews === true && unanswered === 0) return false;
     if (mf.minUnansweredNegative !== null && mf.minUnansweredNegative !== undefined && unanswered < mf.minUnansweredNegative) {
       return false;

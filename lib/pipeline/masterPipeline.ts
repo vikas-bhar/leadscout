@@ -13,6 +13,7 @@ import {
   applyCustomFilters,
   type CustomFilterConfig,
   type CustomPromptConfig,
+  type RawBusinessData,
 } from "@/lib/customization/promptBuilder";
 
 export interface PipelineInput {
@@ -142,9 +143,9 @@ export async function runPipeline(
     // Step 5b — Apply Custom Filter Config if provided
     let candidateBusinesses = enriched;
     if (input.customFilterConfig) {
-      const customFiltered = applyCustomFilters(enriched, input.customFilterConfig);
+      const customFiltered = applyCustomFilters(enriched as unknown as RawBusinessData[], input.customFilterConfig);
       if (customFiltered.length > 0) {
-        candidateBusinesses = customFiltered;
+        candidateBusinesses = customFiltered as unknown as typeof enriched;
       }
     }
 

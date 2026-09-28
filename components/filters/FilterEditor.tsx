@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Filter, Check, SlidersHorizontal, MapPin, Instagram, Sparkles, RefreshCw, X } from "lucide-react";
+import { Filter, Check, SlidersHorizontal, MapPin, Sparkles, RefreshCw, X, Share2 } from "lucide-react";
 import { toast } from "sonner";
 import type { CustomFilterConfig } from "@/lib/customization/promptBuilder";
 
@@ -466,7 +466,7 @@ export function FilterEditor({
           {/* SECTION 2: INSTAGRAM FILTERS */}
           <div className="p-4 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-900/40 space-y-4">
             <div className="flex items-center gap-2 text-xs font-bold text-neutral-900 dark:text-white border-b border-neutral-200/60 pb-2">
-              <Instagram className="w-4 h-4 text-purple-500" />
+              <Share2 className="w-4 h-4 text-purple-500" />
               <span>2. Instagram Social Audit Filters</span>
             </div>
 

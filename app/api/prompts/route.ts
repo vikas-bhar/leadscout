@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from "next/server";
 import { requireApiUser, createSupabaseServiceClient } from "@/lib/supabase";
 import { DEFAULT_PROMPT_TEMPLATES } from "@/lib/customization/defaultTemplates";
@@ -25,20 +26,20 @@ export async function GET() {
       });
     }
 
-    const formatted: CustomPromptConfig[] = data.map((row: any) => ({
-      id: row.id,
-      name: row.name,
-      description: row.description || "",
-      promptType: row.prompt_type || "full",
-      systemPrompt: row.system_prompt,
-      analysisPrompt: row.analysis_prompt,
-      pitchPrompt: row.pitch_prompt,
+    const formatted: CustomPromptConfig[] = data.map((row: Record<string, unknown>) => ({
+      id: row.id as string,
+      name: row.name as string,
+      description: (row.description as string) || "",
+      promptType: (row.prompt_type as any) || "full",
+      systemPrompt: row.system_prompt as string,
+      analysisPrompt: row.analysis_prompt as string,
+      pitchPrompt: (row.pitch_prompt as string) || "",
       scoringCriteria: Array.isArray(row.scoring_criteria) ? row.scoring_criteria : [],
-      isActive: row.is_active,
-      isDefault: row.is_default,
-      usageCount: row.usage_count || 0,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
+      isActive: row.is_active as boolean,
+      isDefault: row.is_default as boolean,
+      usageCount: (row.usage_count as number) || 0,
+      createdAt: row.created_at as string,
+      updatedAt: row.updated_at as string,
     }));
 
     return NextResponse.json({
@@ -72,7 +73,7 @@ export async function POST(request: NextRequest) {
       ? body.id
       : undefined;
 
-    const payload: any = {
+    const payload: Record<string, unknown> = {
       user_id: auth.user.id,
       name: body.name.trim(),
       description: body.description?.trim() || null,
@@ -116,9 +117,10 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({ success: true, prompt: data });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("POST /api/prompts error:", err);
-    return NextResponse.json({ error: err.message || "Failed to save prompt" }, { status: 500 });
+    const message = err instanceof Error ? err.message : "Failed to save prompt";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 
@@ -137,7 +139,8 @@ export async function DELETE(request: NextRequest) {
     await supabase.from("custom_prompts").delete().eq("id", id).eq("user_id", auth.user.id);
 
     return NextResponse.json({ success: true });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message || "Failed to delete" }, { status: 500 });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Failed to delete";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

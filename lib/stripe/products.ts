@@ -25,13 +25,17 @@ export interface SubscriptionProduct {
   highlighted?: boolean;
 }
 
-export const STRIPE_PRODUCTS = {
+export const STRIPE_PRODUCTS: {
+  oneTime: Record<string, OneTimeProduct>;
+  subscriptions: Record<string, SubscriptionProduct>;
+} = {
   // ONE-TIME CREDIT PACKS (existing)
   oneTime: {
     starter: {
       id: "starter",
       name: "Starter Pack",
       credits: 100,
+      bonusCredits: 0,
       price: 9,
       priceId: process.env.STRIPE_STARTER_PRICE_ID || "price_starter_placeholder",
       description: "100 credits, never expire",
@@ -49,6 +53,7 @@ export const STRIPE_PRODUCTS = {
       id: "agency",
       name: "Agency Pack",
       credits: 2000,
+      bonusCredits: 0,
       price: 99,
       priceId: process.env.STRIPE_AGENCY_PRICE_ID || "price_agency_placeholder",
       description: "2000 credits, 3 seats",
@@ -79,6 +84,7 @@ export const STRIPE_PRODUCTS = {
       searchesPerMonth: 12,
       seats: 1,
       creditRollover: 0,
+      highlighted: false,
     },
     growth: {
       id: "growth",
@@ -129,6 +135,7 @@ export const STRIPE_PRODUCTS = {
       searchesPerMonth: 120,
       seats: 5,
       creditRollover: "unlimited" as const,
+      highlighted: false,
     },
   },
 };

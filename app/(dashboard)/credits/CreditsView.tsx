@@ -43,6 +43,7 @@ export function CreditsView({
   const [pricingTab, setPricingTab] = useState<"subscriptions" | "onetime">("subscriptions");
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isOpeningPortal, setIsOpeningPortal] = useState(false);
+  const [customCredits, setCustomCredits] = useState<number>(100);
 
   useEffect(() => {
     function sync() {
@@ -177,6 +178,46 @@ export function CreditsView({
       setBalance(getLocalBalance());
       setTransactions(getLocalTransactions());
       toast.success(`Purchased ${pack.name}! Credits added.`);
+    } finally {
+      setPurchasingPackId(null);
+    }
+  }
+
+  // Flexible custom pack buy action ($0.10 = 1 credit)
+  async function handleBuyCustomCredits() {
+    setPurchasingPackId("flexible");
+    try {
+      const res = await fetch("/api/credits/purchase", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ packageId: "flexible", customCredits }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        const cost = customCredits * 0.10;
+        addLocalCredits(
+          customCredits,
+          `Purchased Flexible Custom Pack (${customCredits} credits for $${cost.toFixed(2)})`
+        );
+        setBalance(getLocalBalance());
+        setTransactions(getLocalTransactions());
+        toast.success(`Purchased ${customCredits} credits for $${cost.toFixed(2)}!`);
+        return;
+      }
+
+      if (data.url) {
+        window.location.href = data.url;
+      }
+    } catch {
+      const cost = customCredits * 0.10;
+      addLocalCredits(
+        customCredits,
+        `Purchased Flexible Custom Pack (${customCredits} credits for $${cost.toFixed(2)})`
+      );
+      setBalance(getLocalBalance());
+      setTransactions(getLocalTransactions());
+      toast.success(`Purchased ${customCredits} credits for $${cost.toFixed(2)}!`);
     } finally {
       setPurchasingPackId(null);
     }
@@ -485,70 +526,128 @@ export function CreditsView({
 
         {/* TAB 2: ONE-TIME CREDIT PACKS */}
         {pricingTab === "onetime" && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {oneTimePacks.map((pkg) => {
-              const totalCredits = pkg.credits + (pkg.bonusCredits || 0);
+          <div className="space-y-6">
+            {/* Custom Flexible Pack Banner / Card ($0.10 = 1 credit) */}
+            <Card className="p-6 rounded-2xl border-2 border-primary/40 bg-gradient-to-r from-primary/5 via-white to-primary/5 dark:from-neutral-900 dark:via-neutral-900 dark:to-neutral-900 flex flex-col md:flex-row items-center justify-between gap-6 shadow-md">
+              <div className="space-y-2 max-w-lg">
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary/10 text-primary text-xs font-bold">
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Flexible Pay-As-You-Go ($0.10 = 1 Credit)</span>
+                </div>
+                <h3 className="text-xl font-bold text-neutral-900 dark:text-white">
+                  Buy Custom Credits on Demand
+                </h3>
+                <p className="text-xs text-neutral-600 dark:text-neutral-300 leading-relaxed">
+                  Need a specific amount? Choose exactly how many credits you need at a flat rate of <strong>$0.10 per credit</strong>. Never expire!
+                </p>
+              </div>
 
-              return (
-                <Card
-                  key={pkg.id}
-                  className="p-6 rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 flex flex-col justify-between shadow-xs"
+              <div className="w-full md:w-auto flex flex-col sm:flex-row items-center gap-4 bg-white dark:bg-neutral-800 p-4 rounded-xl border border-neutral-200 dark:border-neutral-700 shadow-xs">
+                <div className="space-y-1">
+                  <label className="text-[11px] font-semibold text-neutral-500 uppercase tracking-wider">
+                    Credit Amount
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min="10"
+                      max="10000"
+                      step="10"
+                      value={customCredits}
+                      onChange={(e) => setCustomCredits(Math.max(1, parseInt(e.target.value) || 0))}
+                      className="w-28 h-10 px-3 rounded-lg border border-neutral-300 dark:border-neutral-600 bg-neutral-50 dark:bg-neutral-900 text-sm font-bold text-neutral-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/40"
+                    />
+                    <span className="text-xs font-medium text-neutral-500">Credits</span>
+                  </div>
+                </div>
+
+                <div className="text-left sm:text-right min-w-[100px]">
+                  <div className="text-[11px] text-neutral-500 uppercase font-semibold">Total Price</div>
+                  <div className="text-2xl font-extrabold text-primary">
+                    ${(customCredits * 0.10).toFixed(2)}
+                  </div>
+                </div>
+
+                <Button
+                  onClick={handleBuyCustomCredits}
+                  disabled={purchasingPackId === "flexible" || customCredits <= 0}
+                  className="w-full sm:w-auto h-10 px-6 font-bold text-xs gap-2 shrink-0"
                 >
-                  <div className="space-y-4">
-                    <div>
-                      <h3 className="font-bold text-base text-neutral-900 dark:text-white">{pkg.name}</h3>
-                      <div className="mt-2 flex items-baseline gap-1">
-                        <span className="text-3xl font-extrabold text-neutral-900 dark:text-white">
-                          ${pkg.price}
-                        </span>
-                        <span className="text-xs text-neutral-500">one-time</span>
+                  {purchasingPackId === "flexible" ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Coins className="w-4 h-4" />
+                  )}
+                  <span>Buy {customCredits} Credits</span>
+                </Button>
+              </div>
+            </Card>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {oneTimePacks.filter(p => p.id !== "flexible").map((pkg) => {
+                const totalCredits = pkg.credits + (pkg.bonusCredits || 0);
+
+                return (
+                  <Card
+                    key={pkg.id}
+                    className="p-6 rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 flex flex-col justify-between shadow-xs"
+                  >
+                    <div className="space-y-4">
+                      <div>
+                        <h3 className="font-bold text-base text-neutral-900 dark:text-white">{pkg.name}</h3>
+                        <div className="mt-2 flex items-baseline gap-1">
+                          <span className="text-3xl font-extrabold text-neutral-900 dark:text-white">
+                            ${pkg.price}
+                          </span>
+                          <span className="text-xs text-neutral-500">one-time</span>
+                        </div>
+                        <p className="text-[11px] text-neutral-500 mt-0.5">{pkg.description}</p>
                       </div>
-                      <p className="text-[11px] text-neutral-500 mt-0.5">{pkg.description}</p>
+
+                      <div className="p-3 rounded-xl bg-neutral-50 dark:bg-neutral-800/50 border border-neutral-100 dark:border-neutral-800">
+                        <div className="text-xs font-bold text-neutral-900 dark:text-white flex items-center gap-1.5">
+                          <Coins className="w-3.5 h-3.5 text-amber-500" />
+                          <span>{totalCredits.toLocaleString()} Credits Total</span>
+                        </div>
+                        <div className="text-[11px] text-neutral-500 mt-0.5">
+                          ${(pkg.price / totalCredits).toFixed(3)} per credit • Never expire
+                        </div>
+                      </div>
+
+                      <ul className="space-y-2 text-xs text-neutral-600 dark:text-neutral-400">
+                        <li className="flex items-center gap-2">
+                          <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                          <span>Google Maps & Instagram Discovery</span>
+                        </li>
+                        <li className="flex items-center gap-2">
+                          <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                          <span>AI Gap Analysis & Personalized Pitches</span>
+                        </li>
+                        <li className="flex items-center gap-2">
+                          <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                          <span>Credits remain in wallet permanently</span>
+                        </li>
+                      </ul>
                     </div>
 
-                    <div className="p-3 rounded-xl bg-neutral-50 dark:bg-neutral-800/50 border border-neutral-100 dark:border-neutral-800">
-                      <div className="text-xs font-bold text-neutral-900 dark:text-white flex items-center gap-1.5">
-                        <Coins className="w-3.5 h-3.5 text-amber-500" />
-                        <span>{totalCredits.toLocaleString()} Credits Total</span>
-                      </div>
-                      <div className="text-[11px] text-neutral-500 mt-0.5">
-                        ${(pkg.price / totalCredits).toFixed(3)} per credit • Never expire
-                      </div>
+                    <div className="pt-6">
+                      <Button
+                        onClick={() => handleBuyOneTime(pkg.id as "starter" | "pro" | "agency")}
+                        disabled={purchasingPackId === pkg.id}
+                        className="w-full text-xs h-10 font-semibold gap-1.5"
+                      >
+                        {purchasingPackId === pkg.id ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Coins className="w-3.5 h-3.5" />
+                        )}
+                        <span>Buy {totalCredits} Credits</span>
+                      </Button>
                     </div>
-
-                    <ul className="space-y-2 text-xs text-neutral-600 dark:text-neutral-400">
-                      <li className="flex items-center gap-2">
-                        <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                        <span>Google Maps & Instagram Discovery</span>
-                      </li>
-                      <li className="flex items-center gap-2">
-                        <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                        <span>AI Gap Analysis & Personalized Pitches</span>
-                      </li>
-                      <li className="flex items-center gap-2">
-                        <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                        <span>Credits remain in wallet permanently</span>
-                      </li>
-                    </ul>
-                  </div>
-
-                  <div className="pt-6">
-                    <Button
-                      onClick={() => handleBuyOneTime(pkg.id as "starter" | "pro" | "agency")}
-                      disabled={purchasingPackId === pkg.id}
-                      className="w-full text-xs h-10 font-semibold gap-1.5"
-                    >
-                      {purchasingPackId === pkg.id ? (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      ) : (
-                        <Coins className="w-3.5 h-3.5" />
-                      )}
-                      <span>Buy {totalCredits} Credits</span>
-                    </Button>
-                  </div>
-                </Card>
-              );
-            })}
+                  </Card>
+                );
+              })}
+            </div>
           </div>
         )}
       </div>

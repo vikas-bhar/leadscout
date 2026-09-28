@@ -58,6 +58,15 @@ export const STRIPE_PRODUCTS: {
       priceId: process.env.STRIPE_AGENCY_PRICE_ID || "price_agency_placeholder",
       description: "2000 credits, 3 seats",
     },
+    flexible: {
+      id: "flexible",
+      name: "Flexible Pay-As-You-Go",
+      credits: 100,
+      bonusCredits: 0,
+      price: 10,
+      priceId: process.env.STRIPE_FLEXIBLE_PRICE_ID || "price_flexible_placeholder",
+      description: "$0.10 per credit ($0.1 = 1 credit)",
+    },
   },
 
   // MONTHLY SUBSCRIPTIONS (new)

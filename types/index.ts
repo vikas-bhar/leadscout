@@ -542,7 +542,7 @@ export interface UserProfile {
 }
 
 export interface CreditPackage {
-  id: "starter" | "pro" | "agency";
+  id: "starter" | "pro" | "agency" | "flexible";
   name: string;
   credits: number;
   bonusCredits: number;
@@ -665,6 +665,14 @@ export const CREDIT_PACKAGES: CreditPackage[] = [
     credits: 2000,
     bonusCredits: 0,
     priceUsd: 99,
+    popular: false,
+  },
+  {
+    id: "flexible",
+    name: "Flexible Pack ($0.10/credit)",
+    credits: 100,
+    bonusCredits: 0,
+    priceUsd: 10,
     popular: false,
   },
 ];

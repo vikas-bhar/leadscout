@@ -2,10 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requireApiUser } from "@/lib/supabase";
 import { getCreditPackage, packageCreditsAwarded } from "@/lib/credits";
+import type { CreditPackage } from "@/types";
 import { getStripe } from "@/lib/stripe";
 
 const purchaseSchema = z.object({
-  packageId: z.enum(["starter", "pro", "agency"]),
+  packageId: z.string(),
+  customCredits: z.number().optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -13,8 +15,8 @@ export async function POST(request: NextRequest) {
     const auth = await requireApiUser();
     if (!auth.user) return auth.response;
 
-    const { packageId } = purchaseSchema.parse(await request.json());
-    const pack = getCreditPackage(packageId);
+    const { packageId, customCredits } = purchaseSchema.parse(await request.json());
+    const pack = getCreditPackage(packageId as CreditPackage["id"]);
 
     if (!pack) {
       return NextResponse.json({ error: "Unknown package" }, { status: 400 });
@@ -30,7 +32,9 @@ export async function POST(request: NextRequest) {
     }
 
     const stripe = getStripe();
-    const credits = packageCreditsAwarded(pack);
+    const credits = customCredits && customCredits > 0 ? Math.round(customCredits) : packageCreditsAwarded(pack);
+    // $0.10 per credit = 10 cents per credit
+    const unitAmount = customCredits && customCredits > 0 ? Math.round(customCredits * 10) : pack.priceUsd * 100;
 
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
@@ -40,10 +44,10 @@ export async function POST(request: NextRequest) {
           quantity: 1,
           price_data: {
             currency: "usd",
-            unit_amount: pack.priceUsd * 100,
+            unit_amount: unitAmount,
             product_data: {
-              name: `${pack.name} — ${credits} credits`,
-              description: "FreelanceFind credits never expire",
+              name: customCredits ? `Custom Flexible Pack — ${credits} credits ($0.10/credit)` : `${pack.name} — ${credits} credits`,
+              description: "FreelanceFind credits never expire ($0.10 = 1 credit)",
             },
           },
         },

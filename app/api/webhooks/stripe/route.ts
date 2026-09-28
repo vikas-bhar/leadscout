@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import type Stripe from "stripe";
 import { getStripe } from "@/lib/stripe";
 import { addUserCredits, getCreditPackage, packageCreditsAwarded } from "@/lib/credits";
+import type { CreditPackage } from "@/types";
 import { createSupabaseServiceClient } from "@/lib/supabase";
 import { sendEmail } from "@/lib/resend";
 import { STRIPE_PRODUCTS } from "@/lib/stripe/products";
@@ -13,8 +14,8 @@ function creditsFromSession(session: Stripe.Checkout.Session): number {
   if (metadataCredits > 0) return metadataCredits;
 
   const packageId = session.metadata?.package_id || session.metadata?.packageId;
-  if (packageId === "starter" || packageId === "pro" || packageId === "agency") {
-    const pack = getCreditPackage(packageId);
+  if (packageId === "starter" || packageId === "pro" || packageId === "agency" || packageId === "flexible") {
+    const pack = getCreditPackage(packageId as CreditPackage["id"]);
     if (pack) return packageCreditsAwarded(pack);
   }
 

@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireApiUser, createSupabaseServiceClient } from "@/lib/supabase";
+import { requireApiUser } from "@/lib/supabase";
 import { getStripe } from "@/lib/stripe";
 import { STRIPE_PRODUCTS } from "@/lib/stripe/products";
-import { addCredits } from "@/lib/credits";
 
 export const dynamic = "force-dynamic";
 
@@ -22,53 +21,15 @@ export async function POST(request: NextRequest) {
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
-    // If Stripe is not configured or placeholder keys are used, support seamless activation for testing
     if (
       !process.env.STRIPE_SECRET_KEY ||
       process.env.STRIPE_SECRET_KEY === "sk_test_placeholder" ||
       plan.priceId.includes("placeholder")
     ) {
-      const supabase = createSupabaseServiceClient();
-
-      // Update user plan directly in demo mode
-      await supabase
-        .from("users")
-        .update({
-          subscription_plan: planId,
-          subscription_status: "active",
-          custom_prompts_enabled: planId !== "freelancer",
-          max_seats: plan.seats,
-        })
-        .eq("id", auth.user.id);
-
-      // Award subscription credits immediately
-      await addCredits(
-        auth.user.id,
-        plan.monthlyCredits,
-        "subscription",
-        `sub_demo_${Date.now()}`
+      return NextResponse.json(
+        { error: "Stripe payment configuration is required. Real payment is mandatory to activate subscription plans and receive credits." },
+        { status: 400 }
       );
-
-      // Save subscription record
-      await supabase.from("subscriptions").upsert({
-        user_id: auth.user.id,
-        stripe_subscription_id: `sub_demo_${Date.now()}`,
-        stripe_customer_id: `cus_demo_${auth.user.id}`,
-        plan_id: planId,
-        plan_name: plan.name,
-        status: "active",
-        monthly_credits: plan.monthlyCredits,
-        current_period_start: new Date().toISOString(),
-        current_period_end: new Date(Date.now() + 30 * 86400000).toISOString(),
-        cancel_at_period_end: false,
-      });
-
-      return NextResponse.json({
-        success: true,
-        mode: "simulated",
-        message: `${plan.name} plan activated! ${plan.monthlyCredits} monthly credits loaded into your account.`,
-        url: `${appUrl}/credits?subscription=activated&plan=${planId}`,
-      });
     }
 
     const stripe = getStripe();

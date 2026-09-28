@@ -143,7 +143,7 @@ export function CreditsView({
   }
 
   // One-time pack buy action
-  async function handleBuyOneTime(packageId: "starter" | "pro" | "agency") {
+  async function handleBuyOneTime(packageId: "starter" | "pro" | "agency" | "flexible") {
     setPurchasingPackId(packageId);
     try {
       const res = await fetch("/api/credits/purchase", {
@@ -154,30 +154,15 @@ export function CreditsView({
 
       const data = await res.json();
       if (!res.ok) {
-        // Fallback for test / dev environment
-        const pack = STRIPE_PRODUCTS.oneTime[packageId];
-        addLocalCredits(
-          pack.credits + (pack.bonusCredits || 0),
-          `Purchased ${pack.name} (+${pack.credits + (pack.bonusCredits || 0)} credits)`
-        );
-        setBalance(getLocalBalance());
-        setTransactions(getLocalTransactions());
-        toast.success(`Purchased ${pack.name}! Credits added.`);
-        return;
+        throw new Error(data.error || "Stripe payment configuration is required to purchase credits.");
       }
 
       if (data.url) {
         window.location.href = data.url;
       }
-    } catch {
-      const pack = STRIPE_PRODUCTS.oneTime[packageId];
-      addLocalCredits(
-        pack.credits + (pack.bonusCredits || 0),
-        `Purchased ${pack.name} (+${pack.credits + (pack.bonusCredits || 0)} credits)`
-      );
-      setBalance(getLocalBalance());
-      setTransactions(getLocalTransactions());
-      toast.success(`Purchased ${pack.name}! Credits added.`);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to start checkout";
+      toast.error(msg);
     } finally {
       setPurchasingPackId(null);
     }
@@ -195,29 +180,15 @@ export function CreditsView({
 
       const data = await res.json();
       if (!res.ok) {
-        const cost = customCredits * 0.10;
-        addLocalCredits(
-          customCredits,
-          `Purchased Flexible Custom Pack (${customCredits} credits for $${cost.toFixed(2)})`
-        );
-        setBalance(getLocalBalance());
-        setTransactions(getLocalTransactions());
-        toast.success(`Purchased ${customCredits} credits for $${cost.toFixed(2)}!`);
-        return;
+        throw new Error(data.error || "Stripe payment configuration is required to purchase credits.");
       }
 
       if (data.url) {
         window.location.href = data.url;
       }
-    } catch {
-      const cost = customCredits * 0.10;
-      addLocalCredits(
-        customCredits,
-        `Purchased Flexible Custom Pack (${customCredits} credits for $${cost.toFixed(2)})`
-      );
-      setBalance(getLocalBalance());
-      setTransactions(getLocalTransactions());
-      toast.success(`Purchased ${customCredits} credits for $${cost.toFixed(2)}!`);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to start checkout";
+      toast.error(msg);
     } finally {
       setPurchasingPackId(null);
     }

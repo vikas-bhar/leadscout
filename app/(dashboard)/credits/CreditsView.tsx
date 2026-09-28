@@ -19,10 +19,10 @@ import { estimateSearchesRemaining } from "@/lib/credit-calc";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { getLocalBalance, getLocalTransactions, addLocalCredits } from "@/lib/local-store";
+import { getLocalBalance, getLocalTransactions } from "@/lib/local-store";
 import { usePlan } from "@/components/hooks/usePlan";
-import { type Plan } from "@/lib/permissions";
 import { STRIPE_PRODUCTS } from "@/lib/stripe/products";
+import { PaymentModal } from "@/components/modals/PaymentModal";
 
 interface CreditsViewProps {
   initialBalance: CreditBalance;
@@ -34,16 +34,31 @@ export function CreditsView({
   initialBalance,
   initialTransactions,
 }: CreditsViewProps) {
-  const { plan, setPlan, isSubscribed } = usePlan();
+  const { plan, isSubscribed } = usePlan();
   const [balance, setBalance] = useState<CreditBalance>(initialBalance);
   const [transactions, setTransactions] = useState<CreditTransaction[]>(initialTransactions);
-  const [purchasingPlanId, setPurchasingPlanId] = useState<string | null>(null);
-  const [purchasingPackId, setPurchasingPackId] = useState<string | null>(null);
+  const [purchasingPlanId] = useState<string | null>(null);
+  const [purchasingPackId] = useState<string | null>(null);
   const [billingInterval, setBillingInterval] = useState<"month" | "year">("month");
   const [pricingTab, setPricingTab] = useState<"subscriptions" | "onetime">("subscriptions");
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isOpeningPortal, setIsOpeningPortal] = useState(false);
   const [customCredits, setCustomCredits] = useState<number>(100);
+  const [activePayment, setActivePayment] = useState<{
+    isOpen: boolean;
+    title: string;
+    amountUsd: number;
+    creditsAwarded: number;
+    planOrPackageId: string;
+    isSubscription: boolean;
+  }>({
+    isOpen: false,
+    title: "",
+    amountUsd: 0,
+    creditsAwarded: 0,
+    planOrPackageId: "",
+    isSubscription: false,
+  });
 
   useEffect(() => {
     function sync() {
@@ -100,98 +115,51 @@ export function CreditsView({
     }
   }
 
-  // Subscribe action
-  async function handleSubscribe(planId: string) {
-    setPurchasingPlanId(planId);
-    try {
-      const res = await fetch("/api/subscriptions/create", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ planId, interval: billingInterval }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to start checkout");
-      }
-
-      if (data.mode === "simulated") {
-        const planObj = STRIPE_PRODUCTS.subscriptions[planId as keyof typeof STRIPE_PRODUCTS.subscriptions];
-        if (planObj) {
-          addLocalCredits(
-            planObj.monthlyCredits,
-            `Subscribed to ${planObj.name} plan (+${planObj.monthlyCredits} monthly credits)`
-          );
-          setPlan(planId as Plan);
-          setBalance(getLocalBalance());
-          setTransactions(getLocalTransactions());
-        }
-        toast.success(data.message || `Subscribed to ${planId}!`);
-        return;
-      }
-
-      if (data.url) {
-        window.location.href = data.url;
-      }
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Failed to initiate subscription";
-      toast.error(msg);
-    } finally {
-      setPurchasingPlanId(null);
-    }
+  // Subscribe action - opens secure payment modal
+  function handleSubscribe(planId: string) {
+    const planObj = STRIPE_PRODUCTS.subscriptions[planId as keyof typeof STRIPE_PRODUCTS.subscriptions];
+    if (!planObj) return;
+    const price = billingInterval === "year" ? planObj.annualPrice : planObj.price;
+    setActivePayment({
+      isOpen: true,
+      title: `${planObj.name} Subscription (${billingInterval === "year" ? "Annual" : "Monthly"})`,
+      amountUsd: price,
+      creditsAwarded: planObj.monthlyCredits,
+      planOrPackageId: planId,
+      isSubscription: true,
+    });
   }
 
-  // One-time pack buy action
-  async function handleBuyOneTime(packageId: "starter" | "pro" | "agency" | "flexible") {
-    setPurchasingPackId(packageId);
-    try {
-      const res = await fetch("/api/credits/purchase", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ packageId }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || "Stripe payment configuration is required to purchase credits.");
-      }
-
-      if (data.url) {
-        window.location.href = data.url;
-      }
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Failed to start checkout";
-      toast.error(msg);
-    } finally {
-      setPurchasingPackId(null);
-    }
+  // One-time pack buy action - opens secure payment modal
+  function handleBuyOneTime(packageId: "starter" | "pro" | "agency" | "flexible") {
+    const pack = STRIPE_PRODUCTS.oneTime[packageId];
+    if (!pack) return;
+    const totalCredits = pack.credits + (pack.bonusCredits || 0);
+    setActivePayment({
+      isOpen: true,
+      title: pack.name,
+      amountUsd: pack.price,
+      creditsAwarded: totalCredits,
+      planOrPackageId: packageId,
+      isSubscription: false,
+    });
   }
 
-  // Flexible custom pack buy action ($0.10 = 1 credit)
-  async function handleBuyCustomCredits() {
-    setPurchasingPackId("flexible");
-    try {
-      const res = await fetch("/api/credits/purchase", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ packageId: "flexible", customCredits }),
-      });
+  // Flexible custom pack buy action ($0.10 = 1 credit) - opens secure payment modal
+  function handleBuyCustomCredits() {
+    const cost = customCredits * 0.10;
+    setActivePayment({
+      isOpen: true,
+      title: `Flexible Pay-As-You-Go Pack`,
+      amountUsd: cost,
+      creditsAwarded: customCredits,
+      planOrPackageId: "flexible",
+      isSubscription: false,
+    });
+  }
 
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || "Stripe payment configuration is required to purchase credits.");
-      }
-
-      if (data.url) {
-        window.location.href = data.url;
-      }
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Failed to start checkout";
-      toast.error(msg);
-    } finally {
-      setPurchasingPackId(null);
-    }
+  async function handlePaymentSuccess() {
+    await handleRefreshBalance();
   }
 
   // Customer billing portal
@@ -703,6 +671,17 @@ export function CreditsView({
           </table>
         </div>
       </Card>
+
+      <PaymentModal
+        isOpen={activePayment.isOpen}
+        onClose={() => setActivePayment((prev) => ({ ...prev, isOpen: false }))}
+        title={activePayment.title}
+        amountUsd={activePayment.amountUsd}
+        creditsAwarded={activePayment.creditsAwarded}
+        planOrPackageId={activePayment.planOrPackageId}
+        isSubscription={activePayment.isSubscription}
+        onSuccess={handlePaymentSuccess}
+      />
     </div>
   );
 }

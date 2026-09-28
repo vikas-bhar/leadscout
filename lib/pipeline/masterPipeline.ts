@@ -9,6 +9,11 @@ import { createSupabaseServiceClient } from "@/lib/supabase";
 import { deductCredits, addCredits } from "@/lib/credits";
 import { PIPELINE_CONFIG } from "./config";
 import type { CustomClientFilter, AgentAnalysis } from "@/types";
+import {
+  applyCustomFilters,
+  type CustomFilterConfig,
+  type CustomPromptConfig,
+} from "@/lib/customization/promptBuilder";
 
 export interface PipelineInput {
   userId: string;
@@ -24,6 +29,8 @@ export interface PipelineInput {
   excludeNames?: string[];
   excludePlaceIds?: string[];
   customFilter?: CustomClientFilter;
+  customPromptConfig?: CustomPromptConfig;
+  customFilterConfig?: CustomFilterConfig;
 }
 
 export interface PipelineResult {
@@ -132,13 +139,22 @@ export async function runPipeline(
       )
     );
 
+    // Step 5b — Apply Custom Filter Config if provided
+    let candidateBusinesses = enriched;
+    if (input.customFilterConfig) {
+      const customFiltered = applyCustomFilters(enriched, input.customFilterConfig);
+      if (customFiltered.length > 0) {
+        candidateBusinesses = customFiltered;
+      }
+    }
+
     // Step 6 & 7 — Master Agent Orchestrator (Analysis, Psychology & Pitches)
     await onProgress(6, TOTAL_STEPS, "Running LeadScout Master Agents (Psychology, Analysis & Pitches)...");
     const agentResults = [];
 
-    for (let i = 0; i < enriched.length; i++) {
-      const business = enriched[i];
-      const progressPercent = 60 + Math.round((i / Math.max(1, enriched.length)) * 25);
+    for (let i = 0; i < candidateBusinesses.length; i++) {
+      const business = candidateBusinesses[i];
+      const progressPercent = 60 + Math.round((i / Math.max(1, candidateBusinesses.length)) * 25);
       await onProgress(
         Math.min(7, Math.max(6, Math.round((progressPercent / 100) * 8))),
         TOTAL_STEPS,

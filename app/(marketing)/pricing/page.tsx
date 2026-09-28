@@ -5,8 +5,8 @@ import { FinalCTA } from '@/components/marketing/FinalCTA'
 import { Footer } from '@/components/marketing/Footer'
 
 export const metadata = {
-  title: 'Pricing — LeadScout Credit Packages',
-  description: 'Simple credit-based pricing for LeadScout. Free plan with 20 credits. Starter $9, Pro $29, Agency $99. Credits never expire. No subscription required.',
+  title: 'Pricing — Subscription Plans & Credit Packs',
+  description: 'Flexible subscriptions and pay-as-you-go credit packages for LeadScout. Free plan with 20 credits. Monthly subscriptions from $19/mo with auto-refilling credits, or one-time packs from $9.',
   alternates: { canonical: 'https://leadscout-ashy.vercel.app/pricing' }
 }
 

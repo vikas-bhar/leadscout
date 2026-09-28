@@ -18,8 +18,8 @@ export function FAQ() {
       a: "Any freelancer who offers digital services: social media managers, web designers, graphic designers, video editors, copywriters, SEO specialists, photographers, and more."
     },
     {
-      q: "Do credits expire?",
-      a: "Never. Credits you buy stay in your account until you use them. No monthly subscription lock-in."
+      q: "Do credits expire, and how do subscriptions work?",
+      a: "One-time credit packs never expire and remain in your account until you use them. For recurring subscriptions (Freelancer $19/mo, Growth $49/mo, Agency $99/mo), fresh credits are automatically replenished every month, and unused credits roll over according to your plan tier (up to 500 on Growth, unlimited on Agency)."
     },
     {
       q: "What countries and cities does it cover?",

@@ -22,6 +22,8 @@ const searchRequestSchema = z.object({
   excludeNames: z.array(z.string()).optional(),
   excludePlaceIds: z.array(z.string()).optional(),
   customFilter: z.any().optional(),
+  customPromptConfig: z.any().optional(),
+  customFilterConfig: z.any().optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -89,6 +91,8 @@ export async function POST(request: NextRequest) {
         excludeNames: parsed.excludeNames,
         excludePlaceIds: parsed.excludePlaceIds,
         customFilter,
+        customPromptConfig: parsed.customPromptConfig,
+        customFilterConfig: parsed.customFilterConfig,
       },
       async (step, total, message) => {
         const progress = Math.round((step / total) * 100);

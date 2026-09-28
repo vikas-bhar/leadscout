@@ -1,4 +1,6 @@
 import type { CreditBalance, CreditTransaction, Lead, LeadFolder } from "@/types";
+import type { CustomPromptConfig, CustomFilterConfig } from "@/lib/customization/promptBuilder";
+import { DEFAULT_PROMPT_TEMPLATES, DEFAULT_FILTER_TEMPLATES } from "@/lib/customization/defaultTemplates";
 
 export interface StoredSearch {
   id: string;
@@ -14,12 +16,24 @@ export interface StoredSearch {
   created_at: string;
 }
 
+export interface StoredSearchTemplate {
+  id: string;
+  name: string;
+  config: Record<string, unknown>;
+  customPromptId?: string;
+  customFilterId?: string;
+  createdAt: string;
+}
+
 interface MockStorage {
   balance: CreditBalance;
   transactions: CreditTransaction[];
   searches: StoredSearch[];
   leads: Lead[];
   folders: LeadFolder[];
+  customPrompts: CustomPromptConfig[];
+  customFilters: CustomFilterConfig[];
+  searchTemplates: StoredSearchTemplate[];
 }
 
 const STORAGE_KEY = "freelancefind_local_db_v1";
@@ -57,18 +71,18 @@ const DEFAULT_FOLDERS: LeadFolder[] = [
 
 const DEFAULT_STATE: MockStorage = {
   balance: {
-    totalCredits: 100,
+    totalCredits: 20,
     usedCredits: 0,
-    availableCredits: 100,
+    availableCredits: 20,
   },
   transactions: [
     {
       id: "initial-signup",
       userId: "demo-user-id",
       type: "bonus",
-      creditsAmount: 100,
+      creditsAmount: 20,
       action: "signup",
-      description: "Free starter credits (100 credits)",
+      description: "Free starter credits (20 credits)",
       searchId: null,
       stripeSession: null,
       createdAt: new Date().toISOString(),
@@ -77,6 +91,9 @@ const DEFAULT_STATE: MockStorage = {
   searches: [],
   leads: [],
   folders: DEFAULT_FOLDERS,
+  customPrompts: DEFAULT_PROMPT_TEMPLATES,
+  customFilters: DEFAULT_FILTER_TEMPLATES,
+  searchTemplates: [],
 };
 
 // In-memory fallback for SSR or when window is not present
@@ -90,6 +107,20 @@ function getStore(): MockStorage {
         const parsed = JSON.parse(raw);
         if (!parsed.folders || !Array.isArray(parsed.folders) || parsed.folders.length === 0) {
           parsed.folders = DEFAULT_FOLDERS;
+        }
+        if (!parsed.customPrompts || !Array.isArray(parsed.customPrompts) || parsed.customPrompts.length === 0) {
+          parsed.customPrompts = DEFAULT_PROMPT_TEMPLATES;
+        }
+        if (!parsed.customFilters || !Array.isArray(parsed.customFilters) || parsed.customFilters.length === 0) {
+          parsed.customFilters = DEFAULT_FILTER_TEMPLATES;
+        }
+        if (!parsed.searchTemplates || !Array.isArray(parsed.searchTemplates)) {
+          parsed.searchTemplates = [];
+        }
+        // Normalize any old 100-credit default down to 20 free credits if unused
+        if (parsed.balance && parsed.balance.totalCredits === 100 && parsed.balance.usedCredits === 0) {
+          parsed.balance.totalCredits = 20;
+          parsed.balance.availableCredits = 20;
         }
         return parsed;
       }
@@ -395,3 +426,98 @@ export function getLocalLeadById(id: string): Lead | null {
   const byName = leads.find((l) => l.businessName?.toLowerCase() === id.toLowerCase());
   return byName ?? leads[0] ?? null;
 }
+
+// ── CUSTOM PROMPTS CRUD ──
+export function getLocalPrompts(): CustomPromptConfig[] {
+  return getStore().customPrompts || DEFAULT_PROMPT_TEMPLATES;
+}
+
+export function saveLocalPrompt(prompt: CustomPromptConfig): CustomPromptConfig {
+  const store = getStore();
+  const existingIdx = store.customPrompts.findIndex((p) => p.id === prompt.id);
+  const updatedPrompt = {
+    ...prompt,
+    updatedAt: new Date().toISOString(),
+  };
+
+  if (existingIdx !== -1) {
+    store.customPrompts[existingIdx] = updatedPrompt;
+  } else {
+    store.customPrompts.unshift(updatedPrompt);
+  }
+
+  saveStore(store);
+  return updatedPrompt;
+}
+
+export function deleteLocalPrompt(id: string): boolean {
+  const store = getStore();
+  const initialLen = store.customPrompts.length;
+  store.customPrompts = store.customPrompts.filter((p) => p.id !== id);
+  if (store.customPrompts.length !== initialLen) {
+    saveStore(store);
+    return true;
+  }
+  return false;
+}
+
+// ── CUSTOM FILTERS CRUD ──
+export function getLocalFilters(): CustomFilterConfig[] {
+  return getStore().customFilters || DEFAULT_FILTER_TEMPLATES;
+}
+
+export function saveLocalFilter(filter: CustomFilterConfig): CustomFilterConfig {
+  const store = getStore();
+  const existingIdx = store.customFilters.findIndex((f) => f.id === filter.id);
+
+  if (existingIdx !== -1) {
+    store.customFilters[existingIdx] = filter;
+  } else {
+    store.customFilters.unshift(filter);
+  }
+
+  saveStore(store);
+  return filter;
+}
+
+export function deleteLocalFilter(id: string): boolean {
+  const store = getStore();
+  const initialLen = store.customFilters.length;
+  store.customFilters = store.customFilters.filter((f) => f.id !== id);
+  if (store.customFilters.length !== initialLen) {
+    saveStore(store);
+    return true;
+  }
+  return false;
+}
+
+// ── SEARCH TEMPLATES CRUD ──
+export function getLocalTemplates(): StoredSearchTemplate[] {
+  return getStore().searchTemplates || [];
+}
+
+export function saveLocalTemplate(template: StoredSearchTemplate): StoredSearchTemplate {
+  const store = getStore();
+  const existingIdx = store.searchTemplates.findIndex((t) => t.id === template.id);
+
+  if (existingIdx !== -1) {
+    store.searchTemplates[existingIdx] = template;
+  } else {
+    store.searchTemplates.unshift(template);
+  }
+
+  saveStore(store);
+  return template;
+}
+
+export function deleteLocalTemplate(id: string): boolean {
+  const store = getStore();
+  const initialLen = store.searchTemplates.length;
+  store.searchTemplates = store.searchTemplates.filter((t) => t.id !== id);
+  if (store.searchTemplates.length !== initialLen) {
+    saveStore(store);
+    return true;
+  }
+  return false;
+}
+

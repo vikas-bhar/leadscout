@@ -14,6 +14,7 @@ export interface UserAccount {
   phone?: string;
   bio?: string;
   role: "freelancer" | "agency" | "admin";
+  subscriptionPlan?: "free" | "freelancer" | "growth" | "agency";
   createdAt: string;
   lastLoginAt: string;
 }
@@ -186,9 +187,9 @@ export async function loginUser(
   const balance = getLocalBalance();
   if (!balance || (balance.availableCredits ?? 0) === 0) {
     setLocalBalance({
-      totalCredits: 100,
+      totalCredits: 20,
       usedCredits: 0,
-      availableCredits: 100,
+      availableCredits: 20,
     });
   }
 
@@ -199,7 +200,8 @@ export async function signUpUser(
   email: string,
   fullName: string,
   agencyName?: string,
-  freelancerType?: string
+  freelancerType?: string,
+  plan?: "free" | "freelancer" | "growth" | "agency"
 ): Promise<{ success: boolean; user?: UserAccount; error?: string }> {
   const cleanEmail = email.trim().toLowerCase();
   const cleanName = fullName.trim();
@@ -215,12 +217,14 @@ export async function signUpUser(
     existing.fullName = cleanName;
     if (agencyName) existing.agencyName = agencyName;
     if (freelancerType) existing.freelancerType = freelancerType;
+    if (plan) existing.subscriptionPlan = plan;
     existing.lastLoginAt = new Date().toISOString();
     saveAllAccounts(accounts);
     setActiveUser(existing);
     return { success: true, user: existing };
   }
 
+  const selectedPlan = plan || "free";
   const newUser: UserAccount = {
     id: `usr_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
     email: cleanEmail,
@@ -229,6 +233,7 @@ export async function signUpUser(
     freelancerType: freelancerType || "web_designer",
     skills: ["Client Outreach", "Digital Gap Analysis", "Pitches"],
     role: "freelancer",
+    subscriptionPlan: selectedPlan,
     createdAt: new Date().toISOString(),
     lastLoginAt: new Date().toISOString(),
   };
@@ -237,12 +242,24 @@ export async function signUpUser(
   saveAllAccounts(accounts);
   setActiveUser(newUser);
 
-  // Initialize credits for fresh user
+  // Initialize credits:
+  // If user signed up with a paid subscription tier, grant plan credits;
+  // If free, grant exactly 20 free credits.
+  let initialCredits = 20;
+  if (selectedPlan === "freelancer") initialCredits = 300;
+  else if (selectedPlan === "growth") initialCredits = 1000;
+  else if (selectedPlan === "agency") initialCredits = 3000;
+
   setLocalBalance({
-    totalCredits: 100,
+    totalCredits: initialCredits,
     usedCredits: 0,
-    availableCredits: 100,
+    availableCredits: initialCredits,
   });
+
+  if (typeof window !== "undefined") {
+    localStorage.setItem("leadscout_current_plan", selectedPlan);
+    window.dispatchEvent(new Event("freelancefind_user_updated"));
+  }
 
   return { success: true, user: newUser };
 }

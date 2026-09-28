@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import {
   User,
   Plus,
@@ -10,6 +11,9 @@ import {
   RotateCcw,
   UserCheck,
   Coins,
+  Crown,
+  ArrowRight,
+  Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
@@ -157,16 +161,16 @@ export function AccountManager() {
 
   function handleRefillStarterCredits() {
     setLocalBalance({
-      totalCredits: 100,
+      totalCredits: 20,
       usedCredits: 0,
-      availableCredits: 100,
+      availableCredits: 20,
     });
     setBalance({
-      totalCredits: 100,
+      totalCredits: 20,
       usedCredits: 0,
-      availableCredits: 100,
+      availableCredits: 20,
     });
-    toast.success("Reset balance: 100 credits loaded into wallet!");
+    toast.success("Reset balance: 20 credits loaded into wallet!");
   }
 
   return (
@@ -437,6 +441,41 @@ export function AccountManager() {
         </form>
       </Card>
 
+      {/* Subscription & Plan Status */}
+      <Card className="p-5 border-neutral-200 bg-white space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <Crown className="h-4 w-4 text-amber-500" />
+              <h2 className="text-sm font-bold text-neutral-900">Subscription & Membership</h2>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-primary/10 text-primary">
+                {currentUser?.subscriptionPlan && currentUser.subscriptionPlan !== "free"
+                  ? `${currentUser.subscriptionPlan} Plan`
+                  : "Free Tier (20 Credits)"}
+              </span>
+            </div>
+            <p className="text-xs text-neutral-500 mt-1">
+              {currentUser?.subscriptionPlan === "growth" || currentUser?.subscriptionPlan === "agency"
+                ? "Active premium subscription with recurring monthly credits, custom AI prompts, and rollover."
+                : currentUser?.subscriptionPlan === "freelancer"
+                ? "Active Freelancer subscription with 300 monthly credits, Google Maps & Instagram scans, and Gap Analyzer."
+                : "Free account with 20 discovery credits. Subscribe for automatic monthly refills and advanced AI features."}
+            </p>
+          </div>
+          <Link href="/credits">
+            <Button size="sm" className="text-xs gap-1.5 h-8">
+              <Sparkles className="h-3.5 w-3.5 text-amber-300" />
+              <span>
+                {currentUser?.subscriptionPlan && currentUser.subscriptionPlan !== "free"
+                  ? "Manage Plan"
+                  : "Upgrade Subscription"}
+              </span>
+              <ArrowRight className="h-3 w-3" />
+            </Button>
+          </Link>
+        </div>
+      </Card>
+
       {/* Credit & Wallet Utilities */}
       <Card className="p-5 border-neutral-200 bg-white space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -446,7 +485,7 @@ export function AccountManager() {
               Wallet & Starter Credits
             </h2>
             <p className="text-xs text-neutral-500 mt-0.5">
-              Available Credits: <strong>{balance.availableCredits ?? 100}</strong> (Used: {balance.usedCredits ?? 0})
+              Available Credits: <strong>{balance.availableCredits ?? 20}</strong> (Used: {balance.usedCredits ?? 0})
             </p>
           </div>
           <Button
@@ -457,7 +496,7 @@ export function AccountManager() {
             className="text-xs gap-1.5 h-8"
           >
             <RotateCcw className="h-3.5 w-3.5 text-emerald-600" />
-            Refill 100 Free Starter Credits
+            Refill 20 Free Starter Credits
           </Button>
         </div>
       </Card>

@@ -33,8 +33,17 @@ import {
 } from "@/components/search/LocationFilter";
 import { CustomClientFilterAgent } from "@/components/search/CustomClientFilterAgent";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { UpgradeGate } from "@/components/ui/UpgradeGate";
+import type { CustomPromptConfig, CustomFilterConfig } from "@/lib/customization/promptBuilder";
+import {
+  getLocalPrompts,
+  getLocalFilters,
+  saveLocalTemplate,
+} from "@/lib/local-store";
 
 interface SearchViewProps {
   initialAvailableCredits: number;
@@ -80,6 +89,38 @@ export function SearchView({
   const [progressPercent, setProgressPercent] = useState(10);
   const [error, setError] = useState<string | null>(null);
   const [activeCustomFilter, setActiveCustomFilter] = useState<CustomClientFilter | null>(null);
+
+  // Custom Prompt & Custom Filter States
+  const [promptsList, setPromptsList] = useState<CustomPromptConfig[]>([]);
+  const [filtersList, setFiltersList] = useState<CustomFilterConfig[]>([]);
+  const [promptSelectionMode, setPromptSelectionMode] = useState<"default" | "custom">("default");
+  const [selectedPromptId, setSelectedPromptId] = useState<string>("");
+  const [useCustomFilter, setUseCustomFilter] = useState<boolean>(false);
+  const [selectedFilterId, setSelectedFilterId] = useState<string>("filter_no_website");
+  const [saveAsTemplate, setSaveAsTemplate] = useState<boolean>(false);
+  const [templateName, setTemplateName] = useState<string>("");
+
+  useEffect(() => {
+    setPromptsList(getLocalPrompts());
+    setFiltersList(getLocalFilters());
+
+    async function loadRemotePromptsAndFilters() {
+      try {
+        const [resP, resF] = await Promise.all([fetch("/api/prompts"), fetch("/api/filters")]);
+        if (resP.ok) {
+          const dataP = await resP.json();
+          if (dataP.prompts && dataP.prompts.length > 0) setPromptsList(dataP.prompts);
+        }
+        if (resF.ok) {
+          const dataF = await resF.json();
+          if (dataF.filters && dataF.filters.length > 0) setFiltersList(dataF.filters);
+        }
+      } catch {
+        // Fallback to local store already set
+      }
+    }
+    void loadRemotePromptsAndFilters();
+  }, []);
 
   // Sync live credits from server and local storage
   useEffect(() => {
@@ -188,6 +229,35 @@ export function SearchView({
     }, 1000);
 
     try {
+      const activePromptConfig =
+        promptSelectionMode === "custom" && selectedPromptId
+          ? promptsList.find((p) => p.id === selectedPromptId)
+          : undefined;
+
+      const activeFilterConfig =
+        useCustomFilter && selectedFilterId
+          ? filtersList.find((f) => f.id === selectedFilterId)
+          : undefined;
+
+      if (saveAsTemplate && templateName.trim()) {
+        saveLocalTemplate({
+          id: `template_${Date.now()}`,
+          name: templateName.trim(),
+          config: {
+            location: searchTargetLocation,
+            businessCategory: searchCategory,
+            freelancerType: searchFreelancerType,
+            resultCount,
+            country: searchCountry,
+            city: searchCity,
+            place: searchPlace,
+          },
+          customPromptId: activePromptConfig?.id,
+          customFilterId: activeFilterConfig?.id,
+          createdAt: new Date().toISOString(),
+        });
+      }
+
       const response = await fetch("/api/search/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -201,6 +271,8 @@ export function SearchView({
           city: searchCity,
           place: searchPlace,
           customFilter: customFilter || undefined,
+          customPromptConfig: activePromptConfig || undefined,
+          customFilterConfig: activeFilterConfig || undefined,
         }),
       });
 
@@ -547,6 +619,173 @@ export function SearchView({
                     <span>50</span>
                   </div>
                 </div>
+              </div>
+
+              {/* Custom AI Prompt Section */}
+              <div className="space-y-2.5 pt-3 border-t border-neutral-100">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold uppercase tracking-wider text-neutral-700 flex items-center gap-1.5">
+                    <Bot className="h-3.5 w-3.5 text-primary" />
+                    AI Analysis Style & Psychology
+                  </label>
+                  <Link href="/prompts" className="text-[11px] text-primary hover:underline font-medium">
+                    Manage Prompts →
+                  </Link>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setPromptSelectionMode("default")}
+                    className={cn(
+                      "p-2.5 rounded-xl border text-left transition-all",
+                      promptSelectionMode === "default"
+                        ? "border-primary bg-primary/5 text-primary font-bold shadow-xs"
+                        : "border-neutral-200 hover:border-neutral-300 text-neutral-600"
+                    )}
+                  >
+                    <div>Standard Master AI</div>
+                    <div className="text-[10px] text-neutral-400 font-normal">Optimal gap detection</div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setPromptSelectionMode("custom")}
+                    className={cn(
+                      "p-2.5 rounded-xl border text-left transition-all",
+                      promptSelectionMode === "custom"
+                        ? "border-primary bg-primary/5 text-primary font-bold shadow-xs"
+                        : "border-neutral-200 hover:border-neutral-300 text-neutral-600"
+                    )}
+                  >
+                    <div className="flex items-center gap-1">
+                      <span>Custom Prompt</span>
+                      <span className="text-[9px] px-1 py-0.2 rounded bg-amber-100 text-amber-800 font-bold">
+                        Growth
+                      </span>
+                    </div>
+                    <div className="text-[10px] text-neutral-400 font-normal">Your tailored rules</div>
+                  </button>
+                </div>
+
+                {promptSelectionMode === "custom" && (
+                  <UpgradeGate feature="Custom AI Prompts" requiredPlan="growth" featureKey="customPrompts">
+                    <div className="p-3 rounded-xl border border-neutral-200 bg-neutral-50/60 space-y-2">
+                      <Label className="text-xs font-medium text-neutral-700">Select Custom Prompt</Label>
+                      <select
+                        value={selectedPromptId}
+                        onChange={(e) => setSelectedPromptId(e.target.value)}
+                        className="w-full h-9 px-3 rounded-lg border border-neutral-200 bg-white text-xs text-neutral-900"
+                      >
+                        <option value="">-- Choose saved prompt --</option>
+                        {promptsList.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.name} {p.isDefault ? "(Default)" : ""}
+                          </option>
+                        ))}
+                      </select>
+                      <div className="flex justify-between items-center text-[11px] text-neutral-500 pt-1">
+                        <span>Configures system role, gap priorities & pitch angle.</span>
+                        <Link href="/prompts" className="text-primary font-semibold hover:underline">
+                          + Create new prompt
+                        </Link>
+                      </div>
+                    </div>
+                  </UpgradeGate>
+                )}
+              </div>
+
+              {/* Custom Filter Section */}
+              <div className="space-y-2.5 pt-3 border-t border-neutral-100">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold uppercase tracking-wider text-neutral-700 flex items-center gap-1.5">
+                    <Filter className="h-3.5 w-3.5 text-primary" />
+                    Business Qualification Filter
+                  </label>
+                  <label className="flex items-center gap-1.5 cursor-pointer text-xs font-medium text-neutral-600">
+                    <input
+                      type="checkbox"
+                      checked={useCustomFilter}
+                      onChange={(e) => setUseCustomFilter(e.target.checked)}
+                      className="rounded border-neutral-300 text-primary"
+                    />
+                    <span>Custom Filter</span>
+                  </label>
+                </div>
+
+                {/* Quick Preset Buttons */}
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    { id: "all_gaps", label: "All Gaps (Standard)" },
+                    { id: "filter_no_website", label: "No Website" },
+                    { id: "filter_dead_instagram", label: "Dead Instagram" },
+                    { id: "filter_poor_reviews", label: "Poor Reviews" },
+                    { id: "filter_premium_businesses", label: "Premium ($$$+)" },
+                  ].map((preset) => (
+                    <button
+                      key={preset.id}
+                      type="button"
+                      onClick={() => {
+                        setUseCustomFilter(preset.id !== "all_gaps");
+                        setSelectedFilterId(preset.id);
+                      }}
+                      className={cn(
+                        "px-2.5 py-1 rounded-lg text-xs font-medium transition-all border",
+                        selectedFilterId === preset.id
+                          ? "bg-primary text-white border-primary shadow-xs"
+                          : "bg-neutral-50 hover:bg-neutral-100 text-neutral-600 border-neutral-200"
+                      )}
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
+
+                {useCustomFilter && (
+                  <div className="p-3 rounded-xl border border-neutral-200 bg-neutral-50/60 space-y-2 animate-in fade-in-50">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs font-medium text-neutral-700">Saved Filter Rule</Label>
+                      <Link href="/prompts" className="text-[11px] text-primary font-semibold hover:underline">
+                        + Edit or Create Filter
+                      </Link>
+                    </div>
+                    <select
+                      value={selectedFilterId}
+                      onChange={(e) => setSelectedFilterId(e.target.value)}
+                      className="w-full h-9 px-3 rounded-lg border border-neutral-200 bg-white text-xs text-neutral-900"
+                    >
+                      {filtersList.map((f) => (
+                        <option key={f.id} value={f.id}>
+                          {f.name}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-[11px] text-neutral-500">
+                      Filters candidates by review count, website status, social freshness, and engagement.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Save As Search Template Toggle */}
+              <div className="p-3 rounded-xl border border-neutral-100 bg-neutral-50/50 space-y-2 text-xs">
+                <label className="flex items-center gap-2 cursor-pointer font-medium text-neutral-700">
+                  <input
+                    type="checkbox"
+                    checked={saveAsTemplate}
+                    onChange={(e) => setSaveAsTemplate(e.target.checked)}
+                    className="rounded border-neutral-300 text-primary"
+                  />
+                  <span>Save this search setup as a reusable template</span>
+                </label>
+                {saveAsTemplate && (
+                  <Input
+                    value={templateName}
+                    onChange={(e) => setTemplateName(e.target.value)}
+                    placeholder="e.g. Dubai High-Ticket Hospitality Search"
+                    className="h-8 text-xs bg-white"
+                  />
+                )}
               </div>
 
               {error && (

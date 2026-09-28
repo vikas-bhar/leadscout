@@ -2,8 +2,9 @@
 
 import { FormEvent, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
-import { Compass, ArrowRight, CheckCircle2 } from "lucide-react";
+import { Compass, ArrowRight, CheckCircle2, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,12 +13,27 @@ import { signUpUser } from "@/lib/auth-client";
 import { FREELANCER_TYPES, FREELANCER_TYPE_LABELS, type FreelancerType } from "@/types";
 
 export default function SignupForm() {
+  const searchParams = useSearchParams();
+  const requestedPlan = (searchParams.get("plan") || "free").toLowerCase() as
+    | "free"
+    | "freelancer"
+    | "growth"
+    | "agency";
+
   const [fullName, setFullName] = useState("");
   const [agencyName, setAgencyName] = useState("");
   const [freelancerType, setFreelancerType] = useState<FreelancerType>("web_designer");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+
+  const planLabels: Record<string, { name: string; credits: number; price: string }> = {
+    freelancer: { name: "Freelancer Plan", credits: 300, price: "$19/mo" },
+    growth: { name: "Growth Plan", credits: 1000, price: "$49/mo" },
+    agency: { name: "Agency Plan", credits: 3000, price: "$99/mo" },
+  };
+
+  const selectedTier = planLabels[requestedPlan];
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -34,7 +50,13 @@ export default function SignupForm() {
 
     setLoading(true);
     try {
-      const res = await signUpUser(targetEmail, targetFullName, targetAgencyName, targetType);
+      const res = await signUpUser(
+        targetEmail,
+        targetFullName,
+        targetAgencyName,
+        targetType,
+        requestedPlan
+      );
       if (res.success) {
         toast.success(`Account created! Welcome to LeadScout, ${targetFullName}.`);
         window.location.href = "/onboarding";
@@ -57,7 +79,7 @@ export default function SignupForm() {
           </span>
           <div>
             <h1 className="text-lg font-bold text-neutral-900">Create Freelancer Account</h1>
-            <p className="text-xs text-neutral-500">Includes 100 free discovery credits & customized outreach pitch templates.</p>
+            <p className="text-xs text-neutral-500">Includes 20 free discovery credits & customized outreach pitch templates.</p>
           </div>
         </div>
 
@@ -147,10 +169,22 @@ export default function SignupForm() {
             />
           </div>
 
-          <div className="p-3 rounded-lg bg-emerald-50/80 border border-emerald-200 text-emerald-800 text-[11px] flex items-center gap-2">
-            <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
-            <span>100 starter search credits loaded into your wallet instantly upon signup.</span>
-          </div>
+          {selectedTier ? (
+            <div className="p-3 rounded-lg bg-blue-50/90 border border-blue-200 text-blue-900 text-[11px] flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-blue-600 shrink-0" />
+                <span>
+                  Selected Plan: <strong>{selectedTier.name}</strong> ({selectedTier.credits} credits/mo)
+                </span>
+              </div>
+              <span className="font-bold text-blue-700">{selectedTier.price}</span>
+            </div>
+          ) : (
+            <div className="p-3 rounded-lg bg-emerald-50/80 border border-emerald-200 text-emerald-800 text-[11px] flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+              <span>20 starter search credits loaded into your wallet instantly upon signup.</span>
+            </div>
+          )}
 
           <Button type="submit" className="w-full h-9 text-xs font-semibold gap-1.5" disabled={loading}>
             {loading ? "Creating account..." : "Start Finding High-Ticket Leads"}

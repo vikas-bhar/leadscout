@@ -31,7 +31,7 @@ const inMemoryTransactions = new Map<string, Array<{
 function getFallbackBalance(userId: string): { total: number; used: number; available: number } {
   let record = inMemoryBalances.get(userId);
   if (!record) {
-    record = { total: 100, used: 0, available: 100 };
+    record = { total: 20, used: 0, available: 20 };
     inMemoryBalances.set(userId, record);
     // Add default signup transaction
     if (!inMemoryTransactions.has(userId)) {
@@ -40,9 +40,9 @@ function getFallbackBalance(userId: string): { total: number; used: number; avai
           id: `initial_${Date.now()}`,
           user_id: userId,
           type: "bonus",
-          credits_amount: 100,
+          credits_amount: 20,
           action: "signup",
-          description: "Free starter credits (100 credits)",
+          description: "Free starter credits (20 credits)",
           search_id: null,
           stripe_session: null,
           created_at: new Date().toISOString(),
@@ -59,9 +59,9 @@ export function getInMemoryTransactions(userId: string) {
       id: "initial-signup",
       user_id: userId,
       type: "bonus",
-      credits_amount: 100,
+      credits_amount: 20,
       action: "signup",
-      description: "Free starter credits (100 credits)",
+      description: "Free starter credits (20 credits)",
       search_id: null,
       stripe_session: null,
       created_at: new Date().toISOString(),
@@ -88,7 +88,7 @@ export async function getCreditBalance(
     }
 
     if (!data) {
-      // User has no credits record yet - create with 100 initial free credits
+      // User has no credits record yet - create with 20 initial free credits
       try {
         await supabase.from("user_credits").insert({
           user_id: userId,
@@ -102,32 +102,12 @@ export async function getCreditBalance(
           type: "bonus",
           credits_amount: fallback.total,
           action: "signup",
-          description: "Free starter credits (100 credits)",
+          description: "Free starter credits (20 credits)",
         });
       } catch (insertErr) {
         console.log("Error inserting initial user_credits:", insertErr);
       }
       return { totalCredits: fallback.total, usedCredits: fallback.used, availableCredits: fallback.available };
-    }
-
-    // Auto-upgrade legacy accounts that were capped at 20 starter credits
-    if (data.total_credits <= 20) {
-      const bonusToAdd = 100 - data.total_credits;
-      if (bonusToAdd > 0) {
-        data.total_credits = 100;
-        data.available_credits = (data.available_credits || 0) + bonusToAdd;
-        try {
-          await supabase
-            .from("user_credits")
-            .update({
-              total_credits: data.total_credits,
-              available_credits: data.available_credits,
-            })
-            .eq("user_id", userId);
-        } catch (updateErr) {
-          console.log("Error upgrading legacy user credits:", updateErr);
-        }
-      }
     }
 
     // Sync database state to memory fallback

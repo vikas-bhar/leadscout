@@ -26,10 +26,11 @@ import { cn } from "@/lib/utils";
 const NAV_LINKS = [
   { href: "/", label: "Dashboard" },
   { href: "/search", label: "Search" },
+  { href: "/prompts", label: "Prompts & Filters" },
   { href: "/analyze", label: "Analyze" },
   { href: "/leads", label: "Leads" },
   { href: "/history", label: "History" },
-  { href: "/credits", label: "Credits" },
+  { href: "/credits", label: "Credits & Plans" },
   { href: "/settings", label: "Settings" },
 ];
 

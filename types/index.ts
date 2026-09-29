@@ -1,3 +1,5 @@
+export const SUPPORT_EMAIL = "officalleadscout@gmail.com";
+
 export type FreelancerType =
   | "social_media_manager"
   | "web_designer"

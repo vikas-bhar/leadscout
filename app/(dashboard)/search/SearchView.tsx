@@ -188,7 +188,18 @@ export function SearchView({
     }
   }
 
-  async function handleExecuteSearch(customFilter?: CustomClientFilter) {
+  async function handleExecuteSearch(customFilterArg?: unknown) {
+    // Prevent synthetic events or DOM elements from being treated as CustomClientFilter
+    const isFilterObject =
+      customFilterArg &&
+      typeof customFilterArg === "object" &&
+      !("nativeEvent" in (customFilterArg as Record<string, unknown>)) &&
+      !("target" in (customFilterArg as Record<string, unknown>)) &&
+      !("preventDefault" in (customFilterArg as Record<string, unknown>)) &&
+      "nicheFocus" in (customFilterArg as Record<string, unknown>);
+
+    const customFilter = isFilterObject ? (customFilterArg as CustomClientFilter) : undefined;
+
     const searchTargetLocation = (customFilter?.targetLocation?.rawLocation || location).trim();
     const searchCategory = customFilter?.primaryCategory || businessCategory;
     const searchFreelancerType = customFilter?.freelancerType || freelancerType;

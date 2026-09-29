@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { CreditBalance } from "@/components/credits/CreditBalance";
+import { NotificationCenter } from "@/components/ui/NotificationCenter";
 import {
   getActiveUser,
   getAllAccounts,
@@ -141,6 +142,8 @@ export function Navbar() {
           </Link>
 
           <CreditBalance />
+
+          <NotificationCenter />
 
           {/* Account Profile Menu */}
           <div className="relative" ref={menuRef}>

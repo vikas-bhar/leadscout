@@ -50,6 +50,12 @@ export function FAQ() {
           <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-gray-900 dark:text-white mb-4">
             Frequently asked questions
           </h2>
+          <p className="text-sm text-gray-500">
+            Have questions or need dedicated onboarding assistance? Email our team anytime at{" "}
+            <a href="mailto:officalleadscout@gmail.com" className="text-blue-600 font-semibold hover:underline">
+              officalleadscout@gmail.com
+            </a>
+          </p>
         </div>
 
         {/* Accordion */}

@@ -34,6 +34,7 @@ export function getEmailTemplate(
               <li>Instantly generate copy-paste outreach pitches</li>
             </ul>
             <p><a href="https://leadscout.io/search" style="display: inline-block; padding: 10px 20px; background: #2563eb; color: #ffffff; text-decoration: none; border-radius: 8px;">Find My First Client →</a></p>
+            <p style="font-size: 12px; color: #6b7280; margin-top: 24px; border-top: 1px solid #e5e7eb; padding-top: 12px;">Questions? Contact official support at <a href="mailto:officalleadscout@gmail.com">officalleadscout@gmail.com</a></p>
           </div>
         `,
       };

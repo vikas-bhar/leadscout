@@ -34,7 +34,13 @@ export default function PaymentCancelledPage() {
         </div>
 
         <p className="text-[11px] text-gray-400 pt-2">
-          Questions or need help? Contact support@leadscout.io
+          Questions or need help? Contact{" "}
+          <a
+            href="mailto:officalleadscout@gmail.com"
+            className="text-blue-600 hover:underline font-medium"
+          >
+            officalleadscout@gmail.com
+          </a>
         </p>
       </div>
     </div>

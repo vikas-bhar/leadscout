@@ -8,9 +8,9 @@ export async function GET(request: NextRequest) {
     const auth = await requireApiUser();
     if (!auth.user) return auth.response;
 
-    const searchId = request.nextUrl.searchParams.get("id");
+    const searchId = request.nextUrl.searchParams.get("searchId") || request.nextUrl.searchParams.get("id");
     if (!searchId) {
-      return NextResponse.json({ error: "Missing search id" }, { status: 400 });
+      return NextResponse.json({ error: "Missing search id parameter" }, { status: 400 });
     }
 
     const { data, error } = await auth.supabase

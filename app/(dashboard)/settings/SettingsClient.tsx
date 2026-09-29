@@ -1,16 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { Mail, User, Info, CheckCircle2, Sparkles, Cpu, UserCheck } from "lucide-react";
+import { Mail, User, Info, CheckCircle2, Sparkles, Cpu, UserCheck, CreditCard } from "lucide-react";
 import { TemplatesManager } from "@/components/settings/TemplatesManager";
 import { FreelancerProfileForm } from "@/components/settings/FreelancerProfileForm";
 import { AccountManager } from "@/components/settings/AccountManager";
 import { McpIntegrationHub } from "@/components/settings/McpIntegrationHub";
+import { SettingsSubscriptionManager } from "@/components/settings/SettingsSubscriptionManager";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
 export function SettingsClient() {
-  const [activeTab, setActiveTab] = useState<"accounts" | "templates" | "profile" | "mcp" | "guide">("accounts");
+  const [activeTab, setActiveTab] = useState<"accounts" | "subscription" | "templates" | "profile" | "mcp" | "guide">("accounts");
 
   return (
     <div className="max-w-6xl mx-auto space-y-6 pb-16">
@@ -36,6 +37,20 @@ export function SettingsClient() {
         >
           <UserCheck className="h-3.5 w-3.5" />
           Accounts & Team Profiles
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab("subscription")}
+          className={cn(
+            "pb-3 text-xs font-semibold border-b-2 transition-colors flex items-center gap-1.5 whitespace-nowrap",
+            activeTab === "subscription"
+              ? "border-primary text-primary font-bold"
+              : "border-transparent text-neutral-500 hover:text-neutral-800"
+          )}
+        >
+          <CreditCard className="h-3.5 w-3.5" />
+          Subscription & Billing
         </button>
 
         <button
@@ -97,6 +112,8 @@ export function SettingsClient() {
 
       {/* Tab Content */}
       {activeTab === "accounts" && <AccountManager />}
+
+      {activeTab === "subscription" && <SettingsSubscriptionManager />}
 
       {activeTab === "templates" && <TemplatesManager />}
 

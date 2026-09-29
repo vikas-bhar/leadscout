@@ -521,3 +521,16 @@ export function deleteLocalTemplate(id: string): boolean {
   return false;
 }
 
+export function clearLocalLeads(): void {
+  const store = getStore();
+  store.leads = [];
+  saveStore(store);
+}
+
+export function clearLocalSearches(): void {
+  const store = getStore();
+  store.searches = [];
+  saveStore(store);
+}
+
+

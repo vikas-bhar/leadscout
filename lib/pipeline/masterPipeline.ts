@@ -152,168 +152,176 @@ export async function runPipeline(
     // Step 6 & 7 — Master Agent Orchestrator (Analysis, Psychology & Pitches)
     await onProgress(6, TOTAL_STEPS, "Running LeadScout Master Agents (Psychology, Analysis & Pitches)...");
     const agentResults = [];
+    const BATCH_SIZE = 4;
 
-    for (let i = 0; i < candidateBusinesses.length; i++) {
-      const business = candidateBusinesses[i];
+    for (let i = 0; i < candidateBusinesses.length; i += BATCH_SIZE) {
+      const batch = candidateBusinesses.slice(i, i + BATCH_SIZE);
       const progressPercent = 60 + Math.round((i / Math.max(1, candidateBusinesses.length)) * 25);
       await onProgress(
         Math.min(7, Math.max(6, Math.round((progressPercent / 100) * 8))),
         TOTAL_STEPS,
-        `Agent analyzing ${business.name}...`
+        `Agent analyzing batch (${i + 1}-${Math.min(i + BATCH_SIZE, candidateBusinesses.length)} of ${candidateBusinesses.length})...`
       );
 
-      try {
-        const agentRes = await runMasterAgent(
-          business,
-          business.instagram,
-          input.freelancerType,
-          skills,
-          (stepMsg) => {
-            // Non-blocking step log
-            console.log("Agent step:", stepMsg);
-          }
-        );
-
-        if (!agentRes.filtered && agentRes.analysis && agentRes.pitches) {
-          const agentAn = agentRes.analysis as unknown as Record<string, unknown>;
-          const gapAnalysisObj = (agentAn.gapAnalysis || {}) as Record<string, unknown>;
-          const businessIntelObj = (agentAn.businessIntel || {}) as Record<string, unknown>;
-          const pitchStrategyObj = (agentAn.pitchStrategy || {}) as Record<string, unknown>;
-          const rawGaps = (gapAnalysisObj.gaps || []) as Array<Record<string, unknown>>;
-
-          const hybridAnalysis = {
-            ...agentAn,
-            opportunityScore: (gapAnalysisObj.opportunityScore as number) ?? 75,
-            urgencyLevel: (gapAnalysisObj.urgencyLevel as string) ?? "high",
-            estimatedMonthlyBudget: (gapAnalysisObj.estimatedMonthlyBudget as string) ?? "$1,000/mo",
-            gaps: rawGaps.map((g) => ({
-              category: (g.category as string) || "General",
-              problem: (g.problem as string) || "",
-              impact: (g.businessImpact as string) || (g.problem as string) || "",
-              severity: (((g.severity as string) === "critical" ? "high" : g.severity) as "low" | "medium" | "high") || "medium",
-              yourSolution: (g.yourSolution as string) || "",
-            })),
-            strengthsFound: (gapAnalysisObj.strengthsFound as string[]) || [],
-            competitorGap: (businessIntelObj.biggestThreat as string) || "Competitor digital edge",
-            bestServiceToPitch: (pitchStrategyObj.angle as string) || "Conversion optimization",
-            secondaryServices: ["Speed & SEO", "Social Funnel"],
-            buyingSignals: (gapAnalysisObj.buyingSignals as string[]) || [],
-            redFlags: (gapAnalysisObj.redFlags as string[]) || [],
-            pitchAngle: (pitchStrategyObj.angle as string) || "Direct ROI",
-            hookStatement: (pitchStrategyObj.hook as string) || "Quick mobile fix",
-          };
-
-          agentResults.push({
+      const batchPromises = batch.map(async (business) => {
+        try {
+          const agentRes = await runMasterAgent(
             business,
-            analysis: hybridAnalysis as unknown as AgentAnalysis,
-            pitches: agentRes.pitches,
-            clientProfile: agentRes.clientProfile,
-            filterResult: agentRes.filterResult,
-            agentSteps: agentRes.agentSteps,
-          });
-        } else {
-          // Fallback wrapper if filtered or error
-          const fallbackAn = {
-            thoughts: [{ step: "Analysis", reasoning: "Standard evaluation", conclusion: "Qualified" }],
-            clientProfile: {
-              awarenessLevel: "aware" as const,
-              painPoints: ["Digital presence gap"],
-              motivations: ["More clients"],
-              objections: ["Cost"],
-              decisionMakerType: "owner" as const,
-              personalityType: "driver" as const,
-              bestApproach: "Direct ROI",
-              worstApproach: "Generic",
-              bestTimeToContact: "Morning",
-              preferredChannel: "instagram_dm" as const,
-            },
-            businessIntel: {
-              estimatedRevenue: "$300k/yr",
-              estimatedTeamSize: "5",
-              growthStage: "established" as const,
-              digitalMaturity: "basic" as const,
-              competitorStrength: "moderate" as const,
-              marketPosition: "Local establishment",
-              biggestThreat: "Competitor web presence",
-              biggestOpportunity: "Mobile booking conversion",
-            },
-            gapAnalysis: {
+            business.instagram,
+            input.freelancerType,
+            skills,
+            (stepMsg) => {
+              console.log("Agent step:", stepMsg);
+            }
+          );
+
+          if (!agentRes.filtered && agentRes.analysis && agentRes.pitches) {
+            const agentAn = agentRes.analysis as unknown as Record<string, unknown>;
+            const gapAnalysisObj = (agentAn.gapAnalysis || {}) as Record<string, unknown>;
+            const businessIntelObj = (agentAn.businessIntel || {}) as Record<string, unknown>;
+            const pitchStrategyObj = (agentAn.pitchStrategy || {}) as Record<string, unknown>;
+            const rawGaps = (gapAnalysisObj.gaps || []) as Array<Record<string, unknown>>;
+
+            const hybridAnalysis = {
+              ...agentAn,
+              opportunityScore: (gapAnalysisObj.opportunityScore as number) ?? 75,
+              urgencyLevel: (gapAnalysisObj.urgencyLevel as string) ?? "high",
+              estimatedMonthlyBudget: (gapAnalysisObj.estimatedMonthlyBudget as string) ?? "$1,000/mo",
+              gaps: rawGaps.map((g) => ({
+                category: (g.category as string) || "General",
+                problem: (g.problem as string) || "",
+                impact: (g.businessImpact as string) || (g.problem as string) || "",
+                severity: (((g.severity as string) === "critical" ? "high" : g.severity) as "low" | "medium" | "high") || "medium",
+                yourSolution: (g.yourSolution as string) || "",
+              })),
+              strengthsFound: (gapAnalysisObj.strengthsFound as string[]) || [],
+              competitorGap: (businessIntelObj.biggestThreat as string) || "Competitor digital edge",
+              bestServiceToPitch: (pitchStrategyObj.angle as string) || "Conversion optimization",
+              secondaryServices: ["Speed & SEO", "Social Funnel"],
+              buyingSignals: (gapAnalysisObj.buyingSignals as string[]) || [],
+              redFlags: (gapAnalysisObj.redFlags as string[]) || [],
+              pitchAngle: (pitchStrategyObj.angle as string) || "Direct ROI",
+              hookStatement: (pitchStrategyObj.hook as string) || "Quick mobile fix",
+            };
+
+            return {
+              business,
+              analysis: hybridAnalysis as unknown as AgentAnalysis,
+              pitches: agentRes.pitches,
+              clientProfile: agentRes.clientProfile,
+              filterResult: agentRes.filterResult,
+              agentSteps: agentRes.agentSteps,
+            };
+          } else {
+            // Fallback wrapper if filtered or error
+            const fallbackAn = {
+              thoughts: [{ step: "Analysis", reasoning: "Standard evaluation", conclusion: "Qualified" }],
+              clientProfile: {
+                awarenessLevel: "aware" as const,
+                painPoints: ["Digital presence gap"],
+                motivations: ["More clients"],
+                objections: ["Cost"],
+                decisionMakerType: "owner" as const,
+                personalityType: "driver" as const,
+                bestApproach: "Direct ROI",
+                worstApproach: "Generic",
+                bestTimeToContact: "Morning",
+                preferredChannel: "instagram_dm" as const,
+              },
+              businessIntel: {
+                estimatedRevenue: "$300k/yr",
+                estimatedTeamSize: "5",
+                growthStage: "established" as const,
+                digitalMaturity: "basic" as const,
+                competitorStrength: "moderate" as const,
+                marketPosition: "Local establishment",
+                biggestThreat: "Competitor web presence",
+                biggestOpportunity: "Mobile booking conversion",
+              },
+              gapAnalysis: {
+                opportunityScore: 78,
+                urgencyLevel: "high" as const,
+                estimatedMonthlyBudget: "$1,500/mo",
+                gaps: [
+                  ...(business.gaps?.noWebsite ? [{ id: "gap_1", category: "Website", problem: "Missing website", rootCause: "No online presence", businessImpact: "Loses online visitors", estimatedRevenueLoss: "$1k/mo", severity: "high" as const, effortToFix: "medium" as const, yourSolution: "Build high-converting website", timeToResult: "1 week", proofPoints: ["20% more bookings"] }] : []),
+                  { id: "gap_2", category: "Conversion", problem: "Missing mobile booking funnel", rootCause: "Outdated links", businessImpact: "Friction for mobile users", estimatedRevenueLoss: "$500/mo", severity: "high" as const, effortToFix: "low" as const, yourSolution: "Mobile booking optimization", timeToResult: "3 days", proofPoints: ["10+ clients added"] },
+                ],
+                priorityGap: "Missing conversion funnel",
+                quickWins: ["Fix mobile link"],
+                strengthsFound: ["Good reviews"],
+                redFlags: [],
+                buyingSignals: ["Active reviews"],
+              },
+              pitchStrategy: {
+                angle: "Booking leak audit",
+                hook: "Fix booking friction",
+                valueProposition: "Turn views to bookings",
+                socialProof: "Proven case studies",
+                callToAction: "Send quick video?",
+                followUpStrategy: "3-step follow up",
+              },
               opportunityScore: 78,
               urgencyLevel: "high" as const,
               estimatedMonthlyBudget: "$1,500/mo",
               gaps: [
-                ...(business.gaps?.noWebsite ? [{ id: "gap_1", category: "Website", problem: "Missing website", rootCause: "No online presence", businessImpact: "Loses online visitors", estimatedRevenueLoss: "$1k/mo", severity: "high" as const, effortToFix: "medium" as const, yourSolution: "Build high-converting website", timeToResult: "1 week", proofPoints: ["20% more bookings"] }] : []),
-                { id: "gap_2", category: "Conversion", problem: "Missing mobile booking funnel", rootCause: "Outdated links", businessImpact: "Friction for mobile users", estimatedRevenueLoss: "$500/mo", severity: "high" as const, effortToFix: "low" as const, yourSolution: "Mobile booking optimization", timeToResult: "3 days", proofPoints: ["10+ clients added"] },
+                ...(business.gaps?.noWebsite ? [{ category: "Website", problem: "Missing website", impact: "Loses online visitors", severity: "high" as const, yourSolution: "Build high-converting website" }] : []),
+                { category: "Conversion", problem: "Missing mobile booking funnel", impact: "Friction for mobile users", severity: "high" as const, yourSolution: "Mobile booking optimization" },
               ],
-              priorityGap: "Missing conversion funnel",
-              quickWins: ["Fix mobile link"],
               strengthsFound: ["Good reviews"],
-              redFlags: [],
+              competitorGap: "Competitor digital edge",
+              bestServiceToPitch: "Booking conversion optimization",
+              secondaryServices: ["Speed & SEO"],
               buyingSignals: ["Active reviews"],
-            },
-            pitchStrategy: {
-              angle: "Booking leak audit",
-              hook: "Fix booking friction",
-              valueProposition: "Turn views to bookings",
-              socialProof: "Proven case studies",
-              callToAction: "Send quick video?",
-              followUpStrategy: "3-step follow up",
-            },
-            opportunityScore: 78,
-            urgencyLevel: "high" as const,
-            estimatedMonthlyBudget: "$1,500/mo",
-            gaps: [
-              ...(business.gaps?.noWebsite ? [{ category: "Website", problem: "Missing website", impact: "Loses online visitors", severity: "high" as const, yourSolution: "Build high-converting website" }] : []),
-              { category: "Conversion", problem: "Missing mobile booking funnel", impact: "Friction for mobile users", severity: "high" as const, yourSolution: "Mobile booking optimization" },
-            ],
-            strengthsFound: ["Good reviews"],
-            competitorGap: "Competitor digital edge",
-            bestServiceToPitch: "Booking conversion optimization",
-            secondaryServices: ["Speed & SEO"],
-            buyingSignals: ["Active reviews"],
-            redFlags: [],
-            pitchAngle: "Booking leak audit",
-            hookStatement: "Fix booking friction",
-          };
+              redFlags: [],
+              pitchAngle: "Booking leak audit",
+              hookStatement: "Fix booking friction",
+            };
 
-          agentResults.push({
-            business,
-            analysis: fallbackAn,
-            pitches: {
-              instagramDM: {
-                message: `Hey ${business.name}! Noticed your strong reviews — saw a quick mobile fix for your booking link that could add 10+ clients this week. Mind if I send a 30s screenshot?`,
-                characterCount: 160,
-                bestTimeToSend: "11:00 AM",
-                expectedResponseRate: "high" as const,
-                whyThisWorks: "Direct value proposition",
+            return {
+              business,
+              analysis: fallbackAn,
+              pitches: {
+                instagramDM: {
+                  message: `Hey ${business.name}! Noticed your strong reviews — saw a quick mobile fix for your booking link that could add 10+ clients this week. Mind if I send a 30s screenshot?`,
+                  characterCount: 160,
+                  bestTimeToSend: "11:00 AM",
+                  expectedResponseRate: "high" as const,
+                  whyThisWorks: "Direct value proposition",
+                },
+                email: {
+                  subject: `Quick observation for ${business.name}`,
+                  message: `Hi team,\n\nNoticed an opportunity to capture more bookings from your online visitors. Would love to share a quick 30-second video mockup.\n\nBest,\nFreelancer`,
+                  bestTimeToSend: "9:30 AM",
+                  expectedResponseRate: "high" as const,
+                  whyThisWorks: "Low friction permission request",
+                },
+                whatsapp: {
+                  message: `Hey ${business.name}! Saw a quick mobile fix for your booking link. Can I send a 30s screenshot?`,
+                  bestTimeToSend: "10:00 AM",
+                  expectedResponseRate: "high" as const,
+                  whyThisWorks: "Ultra concise",
+                },
+                followUpSequence: [
+                  { dayNumber: 3, channel: "DM", message: "Hey, sharing quick mockup preview!", purpose: "Value" },
+                ],
+                pitchTips: ["Be brief", "Lead with outcome"],
+                whatToAvoid: ["Long intros"],
+                objectionHandlers: [{ objection: "Not interested", response: "No worries at all!" }],
               },
-              email: {
-                subject: `Quick observation for ${business.name}`,
-                message: `Hi team,\n\nNoticed an opportunity to capture more bookings from your online visitors. Would love to share a quick 30-second video mockup.\n\nBest,\nFreelancer`,
-                bestTimeToSend: "9:30 AM",
-                expectedResponseRate: "high" as const,
-                whyThisWorks: "Low friction permission request",
-              },
-              whatsapp: {
-                message: `Hey ${business.name}! Saw a quick mobile fix for your booking link. Can I send a 30s screenshot?`,
-                bestTimeToSend: "10:00 AM",
-                expectedResponseRate: "high" as const,
-                whyThisWorks: "Ultra concise",
-              },
-              followUpSequence: [
-                { dayNumber: 3, channel: "DM", message: "Hey, sharing quick mockup preview!", purpose: "Value" },
-              ],
-              pitchTips: ["Be brief", "Lead with outcome"],
-              whatToAvoid: ["Long intros"],
-              objectionHandlers: [{ objection: "Not interested", response: "No worries at all!" }],
-            },
-            clientProfile: agentRes.clientProfile,
-            filterResult: agentRes.filterResult,
-            agentSteps: agentRes.agentSteps,
-          });
+              clientProfile: agentRes.clientProfile,
+              filterResult: agentRes.filterResult,
+              agentSteps: agentRes.agentSteps,
+            };
+          }
+        } catch (agentErr) {
+          console.error(`Agent processing error for ${business.name}:`, agentErr);
+          return null;
         }
-      } catch (agentErr) {
-        console.error(`Agent processing error for ${business.name}:`, agentErr);
+      });
+
+      const batchResults = await Promise.all(batchPromises);
+      for (const res of batchResults) {
+        if (res) agentResults.push(res);
       }
     }
 

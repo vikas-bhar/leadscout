@@ -78,29 +78,6 @@ export function Pricing() {
       href: '/signup?plan=growth',
       highlighted: true,
     },
-    {
-      id: 'agency',
-      name: 'AGENCY',
-      credits: '3,000 credits/mo',
-      monthlyPrice: 99,
-      annualMonthlyPrice: 79,
-      badge: 'Best For Teams',
-      subtitle: 'For outreach teams & digital agencies',
-      description: 'High-volume lead generation with multi-seat collaboration.',
-      features: [
-        '3,000 credits replenished every month',
-        '~120 deep client searches',
-        '5 team member seats included',
-        'Shared custom prompt studio',
-        'White-label PDF/pitch export',
-        'Full unlimited credit rollover',
-        'API & Zapier integration',
-        'Dedicated account manager',
-      ],
-      cta: 'Start Agency Plan',
-      href: '/signup?plan=agency',
-      highlighted: false,
-    },
   ]
 
   const creditPacks = [
@@ -240,7 +217,7 @@ export function Pricing() {
 
         {/* VIEW 1: SUBSCRIPTION PLANS */}
         {billingTab === 'subscription' && (
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 items-stretch mb-12">
+          <div className="grid md:grid-cols-3 gap-6 items-stretch mb-12 max-w-5xl mx-auto">
             {subscriptionPlans.map((plan) => {
               const displayPrice = billingInterval === 'year' ? plan.annualMonthlyPrice : plan.monthlyPrice
               return (

@@ -51,22 +51,26 @@ export async function findRealBusinessesWithGemini({
     const ai = new GoogleGenAI({ apiKey });
 
     // Cleanly extract target location details from inputs without hardcoded region bias
-    const locationParts = (location || "").split(",").map((s) => s.trim()).filter(Boolean);
-    const targetCity = city || locationParts[0] || "Target City";
-    const targetCountry = country || (locationParts.length > 1 ? locationParts[locationParts.length - 1] : "Target Country");
+    const userLocation = (location || "").trim();
+    const locationParts = userLocation.split(",").map((s) => s.trim()).filter(Boolean);
+    const targetCity = city || locationParts[0] || userLocation || "Target City";
+    const targetCountry = country || (locationParts.length > 1 ? locationParts[locationParts.length - 1] : "");
     const targetArea = place ? `${place}, ` : "";
+    const fullLocationSpec = userLocation ? userLocation : `${targetArea}${targetCity}${targetCountry ? `, ${targetCountry}` : ""}`;
     const exclusionsText =
       excludeBusinesses && excludeBusinesses.length > 0
         ? `\n8. EXCLUSION REQUIREMENT: Do NOT include any of the following businesses which have already been discovered: ${excludeBusinesses.slice(0, 15).join(", ")}. Find NEW, DIFFERENT businesses.`
         : "";
 
     const prompt = `You are an expert local business directory intelligence analyst.
-Find ${Math.min(count, 12)} REAL, ACTUAL, CURRENTLY REGISTERED AND OPERATING businesses for the category "${businessCategory}" in ${targetArea}${targetCity}, ${targetCountry}.
+CRITICAL LOCATION MANDATE: You MUST find businesses STRICTLY located in the user's requested location: "${fullLocationSpec}". DO NOT default to Dubai or any other region unless "${fullLocationSpec}" explicitly specifies Dubai.
+
+Find ${Math.min(count, 12)} REAL, ACTUAL, CURRENTLY REGISTERED AND OPERATING businesses for the category "${businessCategory}" in ${fullLocationSpec}.
 
 CRITICAL ACCURACY RULES:
-1. Every business name MUST be a real, authentic commercial establishment currently operating in ${targetCity}, ${targetCountry}.
-2. The location must be an authentic local street, district, or neighborhood in ${targetCity} (e.g. Central District, Main St, Commercial Center, Financial District).
-3. The phone number must use the genuine, valid dialing code for ${targetCountry}.
+1. Every business name MUST be a real, authentic commercial establishment currently operating in ${fullLocationSpec}.
+2. The location address must be an authentic local street, district, or neighborhood strictly within ${fullLocationSpec}.
+3. The phone number must use the genuine, valid dialing code for ${fullLocationSpec}.
 4. If they have a real website, provide it. If not, set hasWebsite to false and websiteUrl to null.
 5. If they have an active verified Instagram handle, provide it without fictional characters. If unknown, set instagramHandle to null.
 6. Provide their realistic Google Maps rating (between 3.9 and 4.9) and review count.

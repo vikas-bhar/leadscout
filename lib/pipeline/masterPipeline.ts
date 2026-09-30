@@ -72,7 +72,9 @@ export async function runPipeline(
 
   try {
     // Step 2 — Google Maps Scraping
-    const locationQuery = [input.specificPlace, input.city, input.country].filter(Boolean).join(", ");
+    const userLocation = (input.location || "").trim();
+    const constructedLocation = [input.specificPlace, input.city, input.country].filter(Boolean).join(", ");
+    const locationQuery = userLocation || constructedLocation || "Target Region";
     const searchCategoryTerm = input.customFilter?.nicheFocus || input.businessType;
     await onProgress(2, TOTAL_STEPS, `Searching Google Maps for ${searchCategoryTerm} in ${locationQuery}...`);
     const searchQuery = `${searchCategoryTerm} in ${locationQuery}`;

@@ -117,7 +117,7 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
     | "rating_asc"
     | "reviews_asc"
     | "name_asc"
-  >("score_desc");
+  >("time_desc");
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTagPickerId, setActiveTagPickerId] = useState<string | null>(null);
   const [customTagInput, setCustomTagInput] = useState("");
@@ -793,7 +793,16 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
         if (sortBy === "rating_asc") return a.googleRating - b.googleRating;
         if (sortBy === "reviews_asc") return a.reviewCount - b.reviewCount;
         if (sortBy === "name_asc") return a.businessName.localeCompare(b.businessName);
-        return b.opportunityScore - a.opportunityScore;
+        if (sortBy === "score_desc") {
+          const scoreDiff = b.opportunityScore - a.opportunityScore;
+          if (scoreDiff !== 0) return scoreDiff;
+          const tA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+          const tB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          return tB - tA;
+        }
+        const tA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const tB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return tB - tA;
       });
   }, [
     normalizedLeads,

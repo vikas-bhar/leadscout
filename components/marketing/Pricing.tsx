@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { Check, ArrowRight, Sparkles, Calendar, Coins, Zap } from 'lucide-react'
+import { Check, ArrowRight, Sparkles, Calendar, Coins } from 'lucide-react'
 import { useAuthUser } from '@/lib/hooks/useAuthUser'
 
 export function Pricing() {
@@ -377,29 +377,6 @@ export function Pricing() {
             ))}
           </div>
         )}
-
-        {/* Value Proposition Highlight Banner */}
-        <div className="rounded-2xl bg-blue-50/80 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900/60 p-6 max-w-4xl mx-auto mb-10 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0">
-              <Zap className="w-5 h-5" />
-            </div>
-            <div>
-              <h4 className="font-bold text-sm text-gray-900 dark:text-white">
-                All accounts start with 20 Free Credits
-              </h4>
-              <p className="text-xs text-gray-600 dark:text-gray-300 mt-0.5">
-                Scan your first leads and preview AI gap analyses before choosing a subscription or credit pack.
-              </p>
-            </div>
-          </div>
-          <Link
-            href="/signup"
-            className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-all shrink-0 shadow-sm"
-          >
-            Claim 20 Free Credits
-          </Link>
-        </div>
 
         {/* Footer Note */}
         <div className="text-center text-xs text-gray-500 dark:text-gray-400">

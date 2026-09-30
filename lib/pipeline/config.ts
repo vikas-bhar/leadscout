@@ -45,8 +45,8 @@ export const PIPELINE_CONFIG = {
   credits: {
     mapsSearchPer10: 2,
     instagramCheckPer10: 3,
-    aiAnalysisEach: 1,
-    pitchGenerationEach: 1,
+    aiAnalysisEach: 0.5,
+    pitchGenerationEach: 0.5,
     analyzeLink: 5,
     csvExport: 2,
   },

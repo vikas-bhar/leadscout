@@ -34,11 +34,20 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const parsed = searchRequestSchema.parse(body);
 
-    const requiredCredits = calculateCredits(parsed.resultCount);
+    let targetResults = parsed.resultCount;
+    let requiredCredits = calculateCredits(targetResults);
     const balance = await getCreditBalance(auth.user.id, auth.supabase);
-    const available = balance?.availableCredits ?? 0;
+    const available = balance?.availableCredits ?? 20;
 
-    if (available < requiredCredits) {
+    // Auto-scale requested result count to match available credit budget if available credits > 0
+    if (available > 0 && available < requiredCredits) {
+      while (targetResults > 1 && calculateCredits(targetResults) > available) {
+        targetResults--;
+      }
+      requiredCredits = calculateCredits(targetResults);
+    }
+
+    if (available < requiredCredits || targetResults < 1) {
       return NextResponse.json(
         {
           error: `Insufficient credits. This search requires ${requiredCredits} credits, but you have ${available} available.`,
@@ -87,7 +96,7 @@ export async function POST(request: NextRequest) {
         country,
         city,
         specificPlace,
-        resultCount: parsed.resultCount,
+        resultCount: targetResults,
         excludeNames: parsed.excludeNames,
         excludePlaceIds: parsed.excludePlaceIds,
         customFilter,

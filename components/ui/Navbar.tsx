@@ -11,6 +11,7 @@ import {
   Settings,
   ChevronDown,
   Sparkles,
+  LogIn,
 } from "lucide-react";
 import { toast } from "sonner";
 import { CreditBalance } from "@/components/credits/CreditBalance";
@@ -223,6 +224,14 @@ export function Navbar() {
                   >
                     <Sparkles className="h-3.5 w-3.5 text-amber-500" />
                     Manage Credits & Wallet
+                  </Link>
+                  <Link
+                    href="/login"
+                    onClick={() => setIsMenuOpen(false)}
+                    className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-neutral-700 hover:bg-neutral-50 font-medium"
+                  >
+                    <LogIn className="h-3.5 w-3.5 text-blue-600" />
+                    Sign in to another account
                   </Link>
                   <button
                     type="button"

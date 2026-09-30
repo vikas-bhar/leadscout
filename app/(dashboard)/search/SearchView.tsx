@@ -72,10 +72,10 @@ export function SearchView({
   const [businessCategory, setBusinessCategory] = useState<string>(BUSINESS_CATEGORIES[0]);
   
   // Country & City selection state
-  const [country, setCountry] = useState<string>("UAE");
-  const [countryCode, setCountryCode] = useState<string>("AE");
-  const [city, setCity] = useState<string>("Dubai");
-  const [place, setPlace] = useState<string>("Jumeirah");
+  const [country, setCountry] = useState<string>("USA");
+  const [countryCode, setCountryCode] = useState<string>("US");
+  const [city, setCity] = useState<string>("New York");
+  const [place, setPlace] = useState<string>("Manhattan");
 
   const location = buildSearchLocationString(place, city, country);
 

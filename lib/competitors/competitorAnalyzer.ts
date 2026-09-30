@@ -36,6 +36,8 @@ export interface CompetitorAnalysis {
 export function normalizeName(name: string): string {
   return name
     .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "") // Remove diacritics
     .replace(/[^a-z0-9]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
@@ -71,21 +73,22 @@ export async function findCompetitors(
         continue;
       }
 
-      // Check critical essential fields: totalScore / rating and reviewsCount / reviewCount
+      // Strict validation: Require valid totalScore/rating AND reviewsCount/reviewCount
       const rating =
-        typeof item.totalScore === "number"
+        typeof item.totalScore === "number" && !isNaN(item.totalScore)
           ? item.totalScore
-          : typeof item.rating === "number"
+          : typeof item.rating === "number" && !isNaN(item.rating)
           ? item.rating
           : null;
+
       const reviewCount =
-        typeof item.reviewsCount === "number"
+        typeof item.reviewsCount === "number" && !isNaN(item.reviewsCount)
           ? item.reviewsCount
-          : typeof item.reviewCount === "number"
+          : typeof item.reviewCount === "number" && !isNaN(item.reviewCount)
           ? item.reviewCount
           : null;
 
-      // Discard entities missing essential rating or review counts
+      // Discard entities missing essential totalScore/rating or reviewsCount
       if (rating === null || rating <= 0 || reviewCount === null || reviewCount <= 0) {
         continue;
       }
@@ -231,28 +234,28 @@ export async function analyzeVsCompetitors(
       targetBusiness: `${targetRating}★`,
       topCompetitor: `${topRating}★`,
       gap: ratingGapVal > 0 ? `${ratingGapVal}★ lower than top competitor` : "On par with market leader",
-      severity: targetRating < 4.0 ? "critical" : ratingGapVal >= 0.5 ? "high" : "medium",
+      severity: targetRating < 4.0 ? "critical" : ratingGapVal >= 0.5 ? "high" : ratingGapVal > 0 ? "medium" : "low",
     },
     {
       metric: "Review Volume",
       targetBusiness: targetReviews.toLocaleString(),
       topCompetitor: topReviews.toLocaleString(),
       gap: reviewRatio > 1 ? `${reviewRatio}x fewer customer reviews` : "Similar review volume",
-      severity: reviewRatio >= 5 ? "critical" : reviewRatio >= 2 ? "high" : "medium",
+      severity: reviewRatio >= 5 ? "critical" : reviewRatio >= 2 ? "high" : reviewRatio > 1 ? "medium" : "low",
     },
     {
       metric: "Instagram Audience",
       targetBusiness: formatNum(targetFollowers),
       topCompetitor: formatNum(topFollowers),
       gap: targetFollowers === 0 ? "Missing Instagram presence" : followerDiff > 0 ? `${followerDiff.toLocaleString()} fewer followers` : "Competitive follower count",
-      severity: targetFollowers === 0 ? "critical" : followerDiff > 2000 ? "high" : "medium",
+      severity: targetFollowers === 0 ? "critical" : followerDiff > 2000 ? "high" : followerDiff > 0 ? "medium" : "low",
     },
     {
       metric: "Website & Booking Funnel",
       targetBusiness: targetBusiness.website ? "Active Website" : "No Website",
       topCompetitor: topCompetitor?.hasWebsite ? "Active Website" : "No Website",
       gap: !targetBusiness.website && topCompetitor?.hasWebsite ? "Lacks direct mobile website booking" : "Standard conversion layout",
-      severity: !targetBusiness.website && topCompetitor?.hasWebsite ? "critical" : "high",
+      severity: !targetBusiness.website && topCompetitor?.hasWebsite ? "critical" : !targetBusiness.website ? "high" : "medium",
     },
     {
       metric: "Reels & Video Content",
@@ -299,7 +302,7 @@ Return JSON with structure:
 }`;
 
       const res = await genAI.models.generateContent({
-        model: "gemini-2.5-flash",
+        model: "gemini-3.5-flash",
         contents: prompt,
         config: {
           responseMimeType: "application/json",
@@ -311,10 +314,18 @@ Return JSON with structure:
       const parsed = JSON.parse(clean);
 
       if (parsed && Array.isArray(parsed.gaps) && parsed.gaps.length > 0) {
+        const formatVal = (v: unknown): string => {
+          if (typeof v === "number") {
+            return Number.isInteger(v) ? v.toLocaleString() : `${v.toFixed(1)}★`;
+          }
+          if (v === null || v === undefined || v === "" || v === "null") return "N/A";
+          return String(v);
+        };
+
         const sanitizedGaps = parsed.gaps.map((g: Record<string, unknown>) => ({
           metric: String(g.metric || "Digital Gap"),
-          targetBusiness: String(g.targetBusiness ?? "N/A"),
-          topCompetitor: String(g.topCompetitor ?? "N/A"),
+          targetBusiness: formatVal(g.targetBusiness),
+          topCompetitor: formatVal(g.topCompetitor),
           gap: String(g.gap || "Gap identified"),
           severity: normalizeSeverity(g.severity),
         }));

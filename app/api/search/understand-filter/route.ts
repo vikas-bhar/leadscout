@@ -65,8 +65,8 @@ Analyze the prompt carefully. Extract:
   - targetPersona: 1 sentence describing the business owner / decision maker`;
 
         const response = await ai.models.generateContent({
-          model: "gemini-3.8-flash",
-          contents: `Freelancer's Client Search Brief: "${prompt}"\nCurrent Defaults: Role: ${currentFreelancerType}, Location: ${currentPlace ? currentPlace + ", " : ""}${currentCity}, ${currentCountry}`,
+          model: "gemini-3.5-flash",
+          contents: `Freelancer's Client Search Brief: "${prompt}"\nCurrent Defaults (use ONLY if location/category is NOT specified in brief): Role: ${currentFreelancerType}, Location: ${currentPlace ? currentPlace + ", " : ""}${currentCity}, ${currentCountry}`,
           config: {
             systemInstruction,
             temperature: 0.2,
@@ -207,12 +207,27 @@ function generateHeuristicCustomFilter(
 ): CustomClientFilter {
   const pLower = prompt.toLowerCase();
 
-  let category = "Restaurant";
+  let category = "Local Business";
   for (const cat of BUSINESS_CATEGORIES) {
     if (pLower.includes(cat.toLowerCase())) {
       category = cat;
       break;
     }
+  }
+
+  if (category === "Local Business") {
+    if (pLower.includes("clinic") || pLower.includes("dental") || pLower.includes("medical") || pLower.includes("aesthetic") || pLower.includes("doctor")) category = "Medical clinic";
+    else if (pLower.includes("gym") || pLower.includes("fitness") || pLower.includes("trainer") || pLower.includes("crossfit")) category = "Gym / Fitness";
+    else if (pLower.includes("law") || pLower.includes("attorney") || pLower.includes("legal")) category = "Law firm";
+    else if (pLower.includes("real estate") || pLower.includes("realty") || pLower.includes("property")) category = "Real estate agency";
+    else if (pLower.includes("salon") || pLower.includes("spa") || pLower.includes("barber") || pLower.includes("beauty")) category = "Salon / Spa";
+    else if (pLower.includes("cafe") || pLower.includes("coffee")) category = "Cafe";
+    else if (pLower.includes("restaurant") || pLower.includes("dining") || pLower.includes("bistro") || pLower.includes("food")) category = "Restaurant";
+    else if (pLower.includes("bakery") || pLower.includes("cake") || pLower.includes("pastry")) category = "Bakery";
+    else if (pLower.includes("retail") || pLower.includes("boutique") || pLower.includes("store") || pLower.includes("shop")) category = "Retail store";
+    else if (pLower.includes("hotel") || pLower.includes("resort")) category = "Hotel";
+    else if (pLower.includes("repair") || pLower.includes("auto") || pLower.includes("mechanic")) category = "Auto repair";
+    else if (pLower.includes("plumber") || pLower.includes("roofing") || pLower.includes("contractor") || pLower.includes("hvac") || pLower.includes("home")) category = "Home services";
   }
 
   const gaps: string[] = [];

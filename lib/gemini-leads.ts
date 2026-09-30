@@ -50,8 +50,10 @@ export async function findRealBusinessesWithGemini({
   try {
     const ai = new GoogleGenAI({ apiKey });
 
-    const targetCity = city || location.split(",")[0] || "Dubai";
-    const targetCountry = country || "UAE";
+    // Cleanly extract target location details from inputs without hardcoded region bias
+    const locationParts = (location || "").split(",").map((s) => s.trim()).filter(Boolean);
+    const targetCity = city || locationParts[0] || "Target City";
+    const targetCountry = country || (locationParts.length > 1 ? locationParts[locationParts.length - 1] : "Target Country");
     const targetArea = place ? `${place}, ` : "";
     const exclusionsText =
       excludeBusinesses && excludeBusinesses.length > 0
@@ -63,8 +65,8 @@ Find ${Math.min(count, 12)} REAL, ACTUAL, CURRENTLY REGISTERED AND OPERATING bus
 
 CRITICAL ACCURACY RULES:
 1. Every business name MUST be a real, authentic commercial establishment currently operating in ${targetCity}, ${targetCountry}.
-2. The location must be an authentic local street, district, or neighborhood in ${targetCity} (e.g., in Dubai: Jumeirah Beach Rd, Business Bay, Al Wasl, Downtown, DIFC; in London: Regent St, Soho, Kensington; in Mumbai: Bandra, Colaba, Lower Parel).
-3. The phone number must use the genuine country dialing code for ${targetCountry} (e.g. +971 for UAE, +44 for UK, +91 for India, +1 for US/Canada, +966 for Saudi Arabia). Never use fake 555 numbers.
+2. The location must be an authentic local street, district, or neighborhood in ${targetCity} (e.g. Central District, Main St, Commercial Center, Financial District).
+3. The phone number must use the genuine, valid dialing code for ${targetCountry}.
 4. If they have a real website, provide it. If not, set hasWebsite to false and websiteUrl to null.
 5. If they have an active verified Instagram handle, provide it without fictional characters. If unknown, set instagramHandle to null.
 6. Provide their realistic Google Maps rating (between 3.9 and 4.9) and review count.
@@ -80,7 +82,7 @@ Respond with JSON format matching:
       "reviewCount": 184,
       "hasWebsite": true,
       "websiteUrl": "https://...",
-      "phone": "+971 4 ...",
+      "phone": "Local phone with country code",
       "instagramHandle": "@...",
       "digitalGaps": [
         {

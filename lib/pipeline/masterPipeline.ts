@@ -44,7 +44,7 @@ export interface PipelineResult {
 }
 
 export function calculateCredits(resultCount: number): number {
-  return (
+  return Math.round(
     Math.ceil(resultCount / 10) * PIPELINE_CONFIG.credits.mapsSearchPer10 +
     Math.ceil(resultCount / 10) * PIPELINE_CONFIG.credits.instagramCheckPer10 +
     resultCount * PIPELINE_CONFIG.credits.aiAnalysisEach +

@@ -1,61 +1,19 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
-import type { CreditBalance as CreditBalanceType } from "@/types";
-import { getLocalBalance } from "@/lib/local-store";
+import { useRealtimeCredits } from "@/lib/hooks/useRealtimeCredits";
 
 export function CreditBalance() {
-  const [balance, setBalance] = useState<CreditBalanceType | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    function syncBalance() {
-      const local = getLocalBalance();
-      if (local && !cancelled) {
-        setBalance(local);
-      }
-    }
-
-    // Initial sync from local storage
-    syncBalance();
-
-    async function load() {
-      try {
-        const response = await fetch("/api/credits/balance");
-        if (!response.ok) return;
-        const data = (await response.json()) as CreditBalanceType;
-        if (!cancelled && typeof data.availableCredits === "number") {
-          // If server returns fresh data that is not 20 when local is 20, or matches
-          setBalance(data);
-        }
-      } catch (error) {
-        console.log("CreditBalance fetch error", error);
-      }
-    }
-
-    void load();
-
-    // Listen for storage changes across actions
-    window.addEventListener("freelancefind_store_updated", syncBalance);
-    window.addEventListener("storage", syncBalance);
-
-    return () => {
-      cancelled = true;
-      window.removeEventListener("freelancefind_store_updated", syncBalance);
-      window.removeEventListener("storage", syncBalance);
-    };
-  }, []);
-
-  const available = balance?.availableCredits ?? 20;
+  const { availableCredits, isConnected } = useRealtimeCredits();
 
   return (
     <Link
       href="/credits"
-      className="flex items-center rounded-full border border-[#e5e7eb] bg-gray-50 px-3 py-1 text-xs font-medium text-foreground hover:bg-gray-100"
+      className="flex items-center gap-1.5 rounded-full border border-[#e5e7eb] dark:border-neutral-800 bg-gray-50 dark:bg-neutral-900 px-3 py-1 text-xs font-medium text-foreground hover:bg-gray-100 dark:hover:bg-neutral-800 transition-colors"
+      title={isConnected ? "Realtime connected to Supabase user_credits" : "Supabase credit balance"}
     >
-      {available} credits
+      <span className={`w-1.5 h-1.5 rounded-full ${isConnected ? "bg-emerald-500 animate-pulse" : "bg-blue-500"}`} />
+      <span>{availableCredits} credits</span>
     </Link>
   );
 }

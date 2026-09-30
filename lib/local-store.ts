@@ -148,6 +148,12 @@ export function getLocalBalance(): CreditBalance {
   return getStore().balance;
 }
 
+export function updateLocalBalance(balance: CreditBalance) {
+  const store = getStore();
+  store.balance = balance;
+  saveStore(store);
+}
+
 export function deductLocalCredits(amount: number, description: string, searchId?: string): { success: boolean; newBalance: number } {
   const store = getStore();
   const current = store.balance.availableCredits ?? 20;

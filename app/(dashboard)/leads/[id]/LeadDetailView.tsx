@@ -27,6 +27,7 @@ import {
   MessageCircle,
   Mail,
   RefreshCw,
+  Trophy,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -47,6 +48,8 @@ import { cn } from "@/lib/utils";
 import { getLocalLeadById, updateLocalLead } from "@/lib/local-store";
 import { OutreachTemplateModal } from "@/components/leads/OutreachTemplateModal";
 import { FullAnalysis } from "@/components/leads/FullAnalysis";
+import { CompetitorTab } from "@/components/leads/CompetitorTab";
+import type { CompetitorAnalysis } from "@/lib/competitors/competitorAnalyzer";
 
 interface LeadDetailViewProps {
   initialLead: Record<string, unknown>;
@@ -232,6 +235,7 @@ export function LeadDetailView({ initialLead }: LeadDetailViewProps) {
   const [isSavingNotes, setIsSavingNotes] = useState(false);
   const [selectedPitchStyle, setSelectedPitchStyle] = useState<PitchStyle>("instagram_dm");
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [activeLeadTab, setActiveLeadTab] = useState<"analysis" | "competitors">("analysis");
 
   const [isVerifying, setIsVerifying] = useState(false);
   const [verificationReport, setVerificationReport] = useState<{
@@ -770,14 +774,51 @@ export function LeadDetailView({ initialLead }: LeadDetailViewProps) {
         )}
       </Card>
 
-      {/* Master Agent Full Analysis & Psychology Suite */}
-      <div className="space-y-4">
-        <div className="flex items-center gap-2">
-          <Sparkles className="h-5 w-5 text-primary" />
-          <h2 className="text-lg font-bold text-neutral-900">LeadScout Master Agent Intelligence Suite</h2>
-        </div>
-        <FullAnalysis lead={lead} />
+      {/* Lead Detail Navigation Tabs */}
+      <div className="flex border-b border-neutral-200 dark:border-neutral-800 gap-6">
+        <button
+          onClick={() => setActiveLeadTab("analysis")}
+          className={cn(
+            "pb-3 text-xs font-bold uppercase tracking-wider border-b-2 transition-colors flex items-center gap-2 cursor-pointer",
+            activeLeadTab === "analysis"
+              ? "border-primary text-primary"
+              : "border-transparent text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200"
+          )}
+        >
+          <Sparkles className="w-4 h-4" />
+          <span>Master Intelligence & Gaps</span>
+        </button>
+        <button
+          onClick={() => setActiveLeadTab("competitors")}
+          className={cn(
+            "pb-3 text-xs font-bold uppercase tracking-wider border-b-2 transition-colors flex items-center gap-2 cursor-pointer",
+            activeLeadTab === "competitors"
+              ? "border-primary text-primary"
+              : "border-transparent text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200"
+          )}
+        >
+          <Trophy className="w-4 h-4 text-amber-500" />
+          <span>Competitor Analysis</span>
+        </button>
       </div>
+
+      {activeLeadTab === "analysis" ? (
+        <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-5 w-5 text-primary" />
+            <h2 className="text-lg font-bold text-neutral-900 dark:text-white">LeadScout Master Agent Intelligence Suite</h2>
+          </div>
+          <FullAnalysis lead={lead} />
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <Trophy className="h-5 w-5 text-amber-500" />
+            <h2 className="text-lg font-bold text-neutral-900 dark:text-white">Local Competitor Benchmarking & Gap Matrix</h2>
+          </div>
+          <CompetitorTab leadId={lead.id} initialAnalysis={(leadData.competitor_analysis ?? leadData.competitorAnalysis) as CompetitorAnalysis | null} />
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Left Column: Personalized Outreach Pitches */}

@@ -1,9 +1,11 @@
 'use client'
 
 import Link from 'next/link'
-import { ArrowRight, CheckCircle2, Sparkles, MapPin, Star } from 'lucide-react'
+import { ArrowRight, CheckCircle2, Sparkles, Compass, MapPin, Star } from 'lucide-react'
+import { useAuthUser } from '@/lib/hooks/useAuthUser'
 
 export function Hero() {
+  const { isSignedIn } = useAuthUser()
   return (
     <section className="relative overflow-hidden pt-12 pb-24 lg:pt-20 lg:pb-32 bg-gradient-to-b from-blue-50/50 via-white to-white dark:from-gray-900 dark:via-gray-950 dark:to-gray-950">
       {/* Background decoration */}
@@ -37,13 +39,24 @@ export function Hero() {
 
             {/* CTAs */}
             <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto mb-8">
-              <Link
-                href="/signup"
-                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-7 py-3.5 text-base font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-lg shadow-blue-500/25 transition-all hover:translate-y-[-1px]"
-              >
-                Start for free
-                <ArrowRight className="w-4 h-4" />
-              </Link>
+              {isSignedIn ? (
+                <Link
+                  href="/search"
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-7 py-3.5 text-base font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-lg shadow-blue-500/25 transition-all hover:translate-y-[-1px]"
+                >
+                  <Compass className="w-5 h-5" />
+                  <span>Console</span>
+                  <ArrowRight className="w-4 h-4" />
+                </Link>
+              ) : (
+                <Link
+                  href="/signup"
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-7 py-3.5 text-base font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-lg shadow-blue-500/25 transition-all hover:translate-y-[-1px]"
+                >
+                  Start for free
+                  <ArrowRight className="w-4 h-4" />
+                </Link>
+              )}
               <Link
                 href="#how-it-works"
                 className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-7 py-3.5 text-base font-semibold text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-xl transition-all"

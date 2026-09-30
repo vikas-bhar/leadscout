@@ -1,9 +1,11 @@
 'use client'
 
 import Link from 'next/link'
-import { ArrowRight, ShieldCheck, Zap, Coins } from 'lucide-react'
+import { ArrowRight, ShieldCheck, Zap, Coins, Compass } from 'lucide-react'
+import { useAuthUser } from '@/lib/hooks/useAuthUser'
 
 export function FinalCTA() {
+  const { isSignedIn } = useAuthUser()
   return (
     <section className="py-20 lg:py-32 bg-gradient-to-br from-blue-600 to-indigo-700 text-white relative overflow-hidden">
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(255,255,255,0.2),transparent)] pointer-events-none" />
@@ -19,13 +21,24 @@ export function FinalCTA() {
         </p>
 
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-12">
-          <Link
-            href="/signup"
-            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-4 bg-white hover:bg-gray-100 text-blue-600 font-bold rounded-xl shadow-xl transition-all"
-          >
-            <span>Create free account</span>
-            <ArrowRight className="w-4 h-4" />
-          </Link>
+          {isSignedIn ? (
+            <Link
+              href="/search"
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-4 bg-white hover:bg-gray-100 text-blue-600 font-bold rounded-xl shadow-xl transition-all"
+            >
+              <Compass className="w-5 h-5" />
+              <span>Go to Console</span>
+              <ArrowRight className="w-4 h-4" />
+            </Link>
+          ) : (
+            <Link
+              href="/signup"
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-4 bg-white hover:bg-gray-100 text-blue-600 font-bold rounded-xl shadow-xl transition-all"
+            >
+              <span>Create free account</span>
+              <ArrowRight className="w-4 h-4" />
+            </Link>
+          )}
           <Link
             href="/pricing"
             className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-4 bg-blue-700/50 hover:bg-blue-700 text-white font-bold rounded-xl border border-blue-400/30 transition-all"

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Lock, CreditCard, ShieldCheck, Loader2, X, CheckCircle2 } from "lucide-react";
+import { Lock, ShieldCheck, Loader2, X, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
@@ -25,49 +25,50 @@ export function PaymentModal({
   creditsAwarded,
   planOrPackageId,
   isSubscription,
-  onSuccess,
 }: PaymentModalProps) {
-  const [cardNumber, setCardNumber] = useState("4242 •••• •••• 4242");
-  const [expiry, setExpiry] = useState("12/28");
-  const [cvc, setCvc] = useState("123");
-  const [cardholder, setCardholder] = useState("Alex Morgan");
   const [isProcessing, setIsProcessing] = useState(false);
-  const [isSuccess, setIsSuccess] = useState(false);
 
   if (!isOpen) return null;
 
-  async function handlePayment(e: React.FormEvent) {
+  async function handleRedirectToStripe(e: React.FormEvent) {
     e.preventDefault();
     setIsProcessing(true);
 
     try {
-      // Call secure payment processing endpoint or server action
-      const res = await fetch("/api/credits/checkout-simulate", {
+      let endpoint = "";
+      let payload = {};
+
+      if (isSubscription) {
+        endpoint = "/api/subscriptions/create";
+        payload = { planId: planOrPackageId, interval: "month" };
+      } else {
+        endpoint = "/api/credits/purchase";
+        payload = {
+          packageId: planOrPackageId,
+          customCredits: planOrPackageId === "flexible" ? creditsAwarded : undefined,
+        };
+      }
+
+      const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          itemType: isSubscription ? "subscription" : "credits",
-          id: planOrPackageId,
-          credits: creditsAwarded,
-          amount: amountUsd,
-        }),
+        body: JSON.stringify(payload),
       });
 
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error || "Payment processing failed");
+        throw new Error(data.error || "Unable to initiate Stripe checkout");
       }
 
-      setIsSuccess(true);
-      toast.success(`Payment of $${amountUsd.toFixed(2)} successful! ${creditsAwarded} credits added.`);
-      setTimeout(() => {
-        setIsSuccess(false);
-        setIsProcessing(false);
-        onSuccess();
-        onClose();
-      }, 1500);
+      const checkoutUrl = data.url || data.checkoutUrl;
+      if (!checkoutUrl) {
+        throw new Error("Stripe checkout URL not returned");
+      }
+
+      // Redirect to real Stripe Hosted Checkout page
+      window.location.href = checkoutUrl;
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Payment error occurred";
+      const msg = err instanceof Error ? err.message : "Payment redirect failed";
       toast.error(msg);
       setIsProcessing(false);
     }
@@ -83,8 +84,8 @@ export function PaymentModal({
               <Lock className="w-4 h-4" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-neutral-900 dark:text-white">Secure Checkout</h2>
-              <p className="text-[11px] text-neutral-500">256-bit Bank Grade SSL Encryption</p>
+              <h2 className="text-base font-bold text-neutral-900 dark:text-white">Stripe Checkout</h2>
+              <p className="text-[11px] text-neutral-500">Redirecting to secure payment gateway</p>
             </div>
           </div>
           <button
@@ -95,121 +96,61 @@ export function PaymentModal({
           </button>
         </div>
 
-        {isSuccess ? (
-          <div className="p-10 text-center space-y-4">
-            <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto animate-bounce">
-              <CheckCircle2 className="w-8 h-8" />
+        <form onSubmit={handleRedirectToStripe} className="p-6 space-y-5">
+          {/* Order Summary */}
+          <Card className="p-4 rounded-2xl bg-neutral-50 dark:bg-neutral-800/50 border border-neutral-200/80 dark:border-neutral-700/80 flex items-center justify-between">
+            <div>
+              <div className="text-xs font-bold text-neutral-900 dark:text-white">{title}</div>
+              <div className="text-[11px] text-neutral-500 mt-0.5">
+                {creditsAwarded.toLocaleString()} Credits {isSubscription ? "Monthly Subscription" : "One-Time Pack"}
+              </div>
             </div>
-            <h3 className="text-xl font-bold text-neutral-900 dark:text-white">Payment Successful!</h3>
-            <p className="text-xs text-neutral-500">
-              Your payment of <strong className="text-neutral-900 dark:text-white">${amountUsd.toFixed(2)}</strong> was processed successfully. {creditsAwarded} credits have been credited to your wallet.
+            <div className="text-right">
+              <div className="text-lg font-extrabold text-primary">${amountUsd.toFixed(2)}</div>
+              <div className="text-[10px] text-emerald-600 font-semibold">Secure SSL</div>
+            </div>
+          </Card>
+
+          <div className="space-y-3 text-xs text-neutral-600 dark:text-neutral-300">
+            <p className="flex items-center gap-2">
+              <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-[10px]">1</span>
+              <span>You will be securely redirected to Stripe&apos;s official payment page.</span>
+            </p>
+            <p className="flex items-center gap-2">
+              <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-[10px]">2</span>
+              <span>Enter your credit card details safely on Stripe&apos;s encrypted gateway.</span>
+            </p>
+            <p className="flex items-center gap-2">
+              <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-[10px]">3</span>
+              <span>Credits are instantly added to your account upon successful payment.</span>
             </p>
           </div>
-        ) : (
-          <form onSubmit={handlePayment} className="p-6 space-y-5">
-            {/* Order Summary */}
-            <Card className="p-4 rounded-2xl bg-neutral-50 dark:bg-neutral-800/50 border border-neutral-200/80 dark:border-neutral-700/80 flex items-center justify-between">
-              <div>
-                <div className="text-xs font-bold text-neutral-900 dark:text-white">{title}</div>
-                <div className="text-[11px] text-neutral-500 mt-0.5">
-                  {creditsAwarded} Credits {isSubscription ? "Monthly Subscription" : "One-Time Pack"}
-                </div>
-              </div>
-              <div className="text-right">
-                <div className="text-lg font-extrabold text-primary">${amountUsd.toFixed(2)}</div>
-                <div className="text-[10px] text-emerald-600 font-semibold">Instant Access</div>
-              </div>
-            </Card>
 
-            {/* Card Form */}
-            <div className="space-y-4">
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-neutral-700 dark:text-neutral-300 flex items-center gap-1.5">
-                  <CreditCard className="w-3.5 h-3.5 text-neutral-500" />
-                  <span>Cardholder Name</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={cardholder}
-                  onChange={(e) => setCardholder(e.target.value)}
-                  className="w-full h-10 px-3.5 rounded-xl border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-sm text-neutral-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/40"
-                  placeholder="Full name on card"
-                />
-              </div>
+          <div className="pt-2">
+            <Button
+              type="submit"
+              disabled={isProcessing}
+              className="w-full h-11 font-bold text-sm gap-2 shadow-md bg-primary text-white flex items-center justify-center"
+            >
+              {isProcessing ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Connecting to Stripe...</span>
+                </>
+              ) : (
+                <>
+                  <span>Proceed to Stripe Checkout</span>
+                  <ExternalLink className="w-4 h-4" />
+                </>
+              )}
+            </Button>
+          </div>
 
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-neutral-700 dark:text-neutral-300 flex items-center gap-1.5">
-                  <Lock className="w-3.5 h-3.5 text-neutral-500" />
-                  <span>Card Number</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={cardNumber}
-                  onChange={(e) => setCardNumber(e.target.value)}
-                  className="w-full h-10 px-3.5 rounded-xl border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-sm font-mono text-neutral-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/40"
-                  placeholder="4242 4242 4242 4242"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-neutral-700 dark:text-neutral-300">
-                    Expiration Date
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={expiry}
-                    onChange={(e) => setExpiry(e.target.value)}
-                    className="w-full h-10 px-3.5 rounded-xl border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-sm font-mono text-neutral-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/40"
-                    placeholder="MM/YY"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-neutral-700 dark:text-neutral-300 flex items-center gap-1">
-                    <span>CVC / CVV</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={cvc}
-                    onChange={(e) => setCvc(e.target.value)}
-                    className="w-full h-10 px-3.5 rounded-xl border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-sm font-mono text-neutral-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/40"
-                    placeholder="123"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="pt-2">
-              <Button
-                type="submit"
-                disabled={isProcessing}
-                className="w-full h-11 font-bold text-sm gap-2 shadow-md bg-primary text-white"
-              >
-                {isProcessing ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Processing Secure Payment...</span>
-                  </>
-                ) : (
-                  <>
-                    <ShieldCheck className="w-4 h-4" />
-                    <span>Pay ${amountUsd.toFixed(2)} & Get {creditsAwarded} Credits</span>
-                  </>
-                )}
-              </Button>
-            </div>
-
-            <div className="flex items-center justify-center gap-2 text-[11px] text-neutral-500 pt-1">
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Encrypted & Secured by Stripe Payments</span>
-            </div>
-          </form>
-        )}
+          <div className="flex items-center justify-center gap-2 text-[11px] text-neutral-500 pt-1">
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+            <span>Secured & Processed by Stripe</span>
+          </div>
+        </form>
       </div>
     </div>
   );

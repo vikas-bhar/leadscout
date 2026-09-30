@@ -3,10 +3,12 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { Check, ArrowRight, Sparkles, Calendar, Coins, Zap } from 'lucide-react'
+import { useAuthUser } from '@/lib/hooks/useAuthUser'
 
 export function Pricing() {
   const [billingTab, setBillingTab] = useState<'subscription' | 'packs'>('subscription')
   const [billingInterval, setBillingInterval] = useState<'month' | 'year'>('month')
+  const { isSignedIn } = useAuthUser()
 
   const subscriptionPlans = [
     {
@@ -304,14 +306,14 @@ export function Pricing() {
                   </div>
 
                   <Link
-                    href={plan.href}
+                    href={isSignedIn ? (plan.id === 'free' ? '/search' : '/credits') : plan.href}
                     className={`w-full py-3 px-4 rounded-xl font-semibold text-center text-xs sm:text-sm transition-all flex items-center justify-center gap-2 ${
                       plan.highlighted
                         ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-md'
                         : 'bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-900 dark:text-white'
                     }`}
                   >
-                    <span>{plan.cta}</span>
+                    <span>{isSignedIn ? (plan.id === 'free' ? 'Go to Console' : 'Manage in Console') : plan.cta}</span>
                     <ArrowRight className="w-3.5 h-3.5" />
                   </Link>
                 </div>
@@ -384,14 +386,14 @@ export function Pricing() {
                 </div>
 
                 <Link
-                  href={pack.href}
+                  href={isSignedIn ? '/credits' : pack.href}
                   className={`w-full py-3 px-4 rounded-xl font-semibold text-center text-xs sm:text-sm transition-all flex items-center justify-center gap-2 ${
                     pack.highlighted
                       ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-md'
                       : 'bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-900 dark:text-white'
                   }`}
                 >
-                  <span>{pack.cta}</span>
+                  <span>{isSignedIn ? 'Buy in Console' : pack.cta}</span>
                   <ArrowRight className="w-3.5 h-3.5" />
                 </Link>
               </div>

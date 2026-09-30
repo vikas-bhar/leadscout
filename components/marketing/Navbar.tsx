@@ -2,11 +2,13 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { Menu, X } from 'lucide-react'
+import { Menu, X, Compass } from 'lucide-react'
+import { useAuthUser } from '@/lib/hooks/useAuthUser'
 
 export function Navbar() {
   const [scrolled, setScrolled] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const { isSignedIn } = useAuthUser()
 
   useEffect(() => {
     const handleScroll = () => {
@@ -54,18 +56,30 @@ export function Navbar() {
 
         {/* Right: Actions */}
         <div className="hidden md:flex items-center gap-4">
-          <Link 
-            href="/login" 
-            className="text-sm font-medium text-gray-700 dark:text-gray-200 hover:text-blue-600 dark:hover:text-blue-400 px-3 py-2 transition-colors"
-          >
-            Sign in
-          </Link>
-          <Link 
-            href="/signup" 
-            className="inline-flex items-center justify-center text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg shadow-sm transition-all hover:shadow"
-          >
-            Start free
-          </Link>
+          {isSignedIn ? (
+            <Link 
+              href="/search" 
+              className="inline-flex items-center justify-center gap-2 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 px-5 py-2 rounded-lg shadow-sm transition-all hover:shadow"
+            >
+              <Compass className="w-4 h-4" />
+              <span>Console</span>
+            </Link>
+          ) : (
+            <>
+              <Link 
+                href="/login" 
+                className="text-sm font-medium text-gray-700 dark:text-gray-200 hover:text-blue-600 dark:hover:text-blue-400 px-3 py-2 transition-colors"
+              >
+                Sign in
+              </Link>
+              <Link 
+                href="/signup" 
+                className="inline-flex items-center justify-center text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg shadow-sm transition-all hover:shadow"
+              >
+                Start free
+              </Link>
+            </>
+          )}
         </div>
 
         {/* Mobile Hamburger Button */}
@@ -112,20 +126,33 @@ export function Navbar() {
             FAQ
           </Link>
           <div className="pt-2 flex flex-col gap-3">
-            <Link 
-              href="/login" 
-              onClick={() => setMobileMenuOpen(false)}
-              className="w-full text-center py-2.5 text-sm font-medium text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-700 rounded-lg"
-            >
-              Sign in
-            </Link>
-            <Link 
-              href="/signup" 
-              onClick={() => setMobileMenuOpen(false)}
-              className="w-full text-center py-2.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow"
-            >
-              Start free
-            </Link>
+            {isSignedIn ? (
+              <Link 
+                href="/search" 
+                onClick={() => setMobileMenuOpen(false)}
+                className="w-full text-center py-2.5 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow flex items-center justify-center gap-2"
+              >
+                <Compass className="w-4 h-4" />
+                <span>Console</span>
+              </Link>
+            ) : (
+              <>
+                <Link 
+                  href="/login" 
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="w-full text-center py-2.5 text-sm font-medium text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-700 rounded-lg"
+                >
+                  Sign in
+                </Link>
+                <Link 
+                  href="/signup" 
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="w-full text-center py-2.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow"
+                >
+                  Start free
+                </Link>
+              </>
+            )}
           </div>
         </div>
       )}

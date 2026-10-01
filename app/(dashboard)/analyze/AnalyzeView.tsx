@@ -16,6 +16,7 @@ import {
   Terminal,
 } from "lucide-react";
 import { toast } from "sonner";
+import { LocationGapAgent } from "@/components/analyzer/LocationGapAgent";
 import { detectLinkType } from "@/lib/analyzer/detectLink";
 import { AnalysisResult } from "@/components/analyzer/AnalysisResult";
 import { deductLocalCredits, saveLocalLeads, getLocalBalance } from "@/lib/local-store";
@@ -34,6 +35,7 @@ const SAMPLE_LINKS = [
 ];
 
 export function AnalyzeView({ initialAvailableCredits }: AnalyzeViewProps) {
+  const [activeTab, setActiveTab] = useState<"location_agent" | "link">("location_agent");
   const [url, setUrl] = useState("");
   const [availableCredits, setAvailableCredits] = useState(initialAvailableCredits);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -281,8 +283,47 @@ export function AnalyzeView({ initialAvailableCredits }: AnalyzeViewProps) {
         </div>
       </div>
 
-      {/* Input Section */}
-      <Card className="border border-neutral-200/80 bg-white p-6 shadow-sm">
+      {/* Mode Navigation Tabs */}
+      <div className="flex items-center gap-2 border-b border-neutral-200 pb-1">
+        <button
+          type="button"
+          onClick={() => setActiveTab("location_agent")}
+          className={`px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2 ${
+            activeTab === "location_agent"
+              ? "bg-neutral-900 text-white shadow-xs"
+              : "text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100"
+          }`}
+        >
+          <MapPin className="h-3.5 w-3.5 text-emerald-400" />
+          AI Location &amp; Profile Deep Agent
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab("link")}
+          className={`px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2 ${
+            activeTab === "link"
+              ? "bg-neutral-900 text-white shadow-xs"
+              : "text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100"
+          }`}
+        >
+          <LinkIcon className="h-3.5 w-3.5 text-primary" />
+          Paste Business Link / URL
+        </button>
+      </div>
+
+      {/* Tab 1: Location & Profile Deep Agent */}
+      {activeTab === "location_agent" && (
+        <LocationGapAgent
+          availableCredits={availableCredits}
+          onRunAnalysis={(query) => executeAnalysis(query, true)}
+          isAnalyzing={isAnalyzing}
+        />
+      )}
+
+      {/* Tab 2: URL Input Section */}
+      {activeTab === "link" && (
+        <Card className="border border-neutral-200/80 bg-white p-6 shadow-sm">
         <form onSubmit={handleAnalyze} className="space-y-4">
           <div className="space-y-2">
             <div className="flex items-center justify-between">
@@ -402,6 +443,7 @@ export function AnalyzeView({ initialAvailableCredits }: AnalyzeViewProps) {
           </div>
         </form>
       </Card>
+      )}
 
       {/* Loading Progress State */}
       {isAnalyzing && (

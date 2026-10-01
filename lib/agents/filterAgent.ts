@@ -1,4 +1,5 @@
 import { GoogleGenAI } from "@google/genai";
+import { isValidWebsiteUrl } from "@/lib/pipeline/cleaner";
 import type { FilterResult, FilterDecision } from "@/types";
 
 export type { FilterDecision, FilterResult };
@@ -47,9 +48,11 @@ export function applyHardFilters(
     };
   }
 
+  const hasValidWeb = Boolean(business?.website && isValidWebsiteUrl(business.website));
+
   // Soft filters — count gaps
   const gapCount = [
-    !business?.website,
+    !hasValidWeb,
     (business?.rating || 5) < 4.2,
     (business?.photoCount || 0) < 8,
     !business?.phone,

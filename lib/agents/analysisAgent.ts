@@ -1,6 +1,8 @@
 import { GoogleGenAI } from "@google/genai";
 import type { AgentAnalysis, AgentThought } from "@/types";
 import type { BusinessInput, InstagramInput } from "./filterAgent";
+import { factCheckAndSanitizeGaps } from "@/lib/pipeline/gapFactChecker";
+import { isValidWebsiteUrl } from "@/lib/pipeline/cleaner";
 
 export type { AgentAnalysis, AgentThought };
 
@@ -247,38 +249,23 @@ function sanitizeAgentAnalysis(
 
   const rawGap = (raw.gapAnalysis || {}) as Record<string, unknown>;
   const rawGapList = Array.isArray(rawGap.gaps) && rawGap.gaps.length > 0
-    ? (rawGap.gaps as AgentAnalysis["gapAnalysis"]["gaps"])
-    : fallback.gapAnalysis.gaps;
+    ? (rawGap.gaps as Array<Record<string, unknown>>)
+    : (fallback.gapAnalysis.gaps as unknown as Array<Record<string, unknown>>);
 
-  let cleanedGaps = rawGapList.filter(
-    (g) =>
-      !String(g.problem || "").toLowerCase().includes("none detected") &&
-      !String(g.category || "").toLowerCase().includes("clean opportunity") &&
-      !String(g.problem || "").toLowerCase().includes("no gap")
+  const factCheckedGaps = factCheckAndSanitizeGaps(
+    rawGapList,
+    {
+      website: business.website,
+      rating: business.rating,
+      reviewCount: business.reviewCount,
+      phone: business.phone,
+      photoCount: business.photoCount,
+      unansweredNegativeReviews: business.unansweredNegativeReviews,
+    },
+    instagram
   );
 
-  const hasNoWeb = !business.website || business.website === "NONE" || business.website.trim() === "";
-  if (hasNoWeb) {
-    if (!cleanedGaps.some((g) => String(g.category || "").toLowerCase().includes("website") || String(g.problem || "").toLowerCase().includes("website"))) {
-      cleanedGaps.unshift({
-        id: "gap_missing_website",
-        category: "Website & Mobile Funnel",
-        problem: "No official website or online reservation portal listed on Google Business Profile",
-        rootCause: "Relied solely on word-of-mouth without digital customer capture",
-        businessImpact: "Loses 100% of online search traffic to competitors with mobile booking sites",
-        estimatedRevenueLoss: "$1,500 - $4,000/mo",
-        severity: "high",
-        effortToFix: "medium",
-        yourSolution: "Build a high-converting mobile-first landing page with direct booking integration",
-        timeToResult: "5-7 days",
-        proofPoints: ["Increases online inquiry conversions by 35%+"],
-      });
-    }
-  }
-
-  if (cleanedGaps.length === 0) {
-    cleanedGaps = fallback.gapAnalysis.gaps;
-  }
+  const hasNoWeb = !business.website || !isValidWebsiteUrl(business.website);
 
   const gapAnalysis = {
     opportunityScore: typeof rawGap.opportunityScore === "number" ? rawGap.opportunityScore : fallback.gapAnalysis.opportunityScore,
@@ -286,8 +273,8 @@ function sanitizeAgentAnalysis(
       ? rawGap.urgencyLevel
       : "high") as "critical" | "high" | "medium" | "low",
     estimatedMonthlyBudget: (rawGap.estimatedMonthlyBudget as string) || fallback.gapAnalysis.estimatedMonthlyBudget,
-    gaps: cleanedGaps,
-    priorityGap: hasNoWeb ? "Missing Official Website & Mobile Funnel" : ((rawGap.priorityGap as string) || fallback.gapAnalysis.priorityGap),
+    gaps: factCheckedGaps as unknown as AgentAnalysis["gapAnalysis"]["gaps"],
+    priorityGap: factCheckedGaps[0]?.category || (hasNoWeb ? "Missing Official Website & Mobile Funnel" : ((rawGap.priorityGap as string) || fallback.gapAnalysis.priorityGap)),
     quickWins: Array.isArray(rawGap.quickWins) ? (rawGap.quickWins as string[]) : fallback.gapAnalysis.quickWins,
     strengthsFound: Array.isArray(rawGap.strengthsFound) ? (rawGap.strengthsFound as string[]) : fallback.gapAnalysis.strengthsFound,
     redFlags: Array.isArray(rawGap.redFlags) ? (rawGap.redFlags as string[]) : [],
@@ -324,6 +311,37 @@ function generateHeuristicAgentAnalysis(
   const hasNoWebsite = !business.website;
   const hasDeadIg = Boolean(instagram?.found && (instagram.daysSinceLastPost ?? 0) > 21);
   const oppScore = Math.min(95, Math.max(65, (reviews > 30 ? 40 : 25) + (hasNoWebsite ? 35 : 15) + (hasDeadIg ? 20 : 10)));
+
+  const rawInitialGaps = [
+    {
+      id: "gap_primary",
+      category: hasNoWebsite ? "Website & Mobile Funnel" : "Conversion & Engagement Funnel",
+      problem: hasNoWebsite
+        ? "No mobile-responsive website or direct online booking system"
+        : "Underdeveloped mobile conversion path causing customer drop-off",
+      rootCause: "Relied exclusively on offline word-of-mouth without digital automation",
+      businessImpact: "Losing up to 25+ high-intent booking inquiries every week",
+      estimatedRevenueLoss: "$2,000 - $4,500/mo",
+      severity: "high" as const,
+      effortToFix: "medium",
+      yourSolution: "Implement a modern high-converting mobile booking architecture",
+      timeToResult: "7-10 days",
+      proofPoints: ["Average 35% increase in online inquiries for local businesses"],
+    },
+  ];
+
+  const checkedGaps = factCheckAndSanitizeGaps(
+    rawInitialGaps as unknown as Array<Record<string, unknown>>,
+    {
+      website: business.website,
+      rating: business.rating,
+      reviewCount: business.reviewCount,
+      phone: business.phone,
+      photoCount: business.photoCount,
+      unansweredNegativeReviews: business.unansweredNegativeReviews,
+    },
+    instagram
+  );
 
   return {
     thoughts: [
@@ -374,24 +392,8 @@ function generateHeuristicAgentAnalysis(
       opportunityScore: oppScore,
       urgencyLevel: oppScore >= 80 ? "critical" : "high",
       estimatedMonthlyBudget: "$1,500 - $3,500/mo",
-      gaps: [
-        {
-          id: "gap_primary",
-          category: hasNoWebsite ? "Website & Mobile Funnel" : "Conversion & Engagement Funnel",
-          problem: hasNoWebsite
-            ? "No mobile-responsive website or direct online booking system"
-            : "Underdeveloped mobile conversion path causing customer drop-off",
-          rootCause: "Relied exclusively on offline word-of-mouth without digital automation",
-          businessImpact: "Losing up to 25+ high-intent booking inquiries every week",
-          estimatedRevenueLoss: "$2,000 - $4,500/mo",
-          severity: "high",
-          effortToFix: "medium",
-          yourSolution: "Implement a modern high-converting mobile booking architecture",
-          timeToResult: "7-10 days",
-          proofPoints: ["Average 35% increase in online inquiries for local businesses"],
-        },
-      ],
-      priorityGap: hasNoWebsite ? "Missing Dedicated Mobile Conversion Website" : "Dead Social Booking Funnel",
+      gaps: checkedGaps as unknown as AgentAnalysis["gapAnalysis"]["gaps"],
+      priorityGap: checkedGaps[0]?.category || (hasNoWebsite ? "Missing Dedicated Mobile Conversion Website" : "Dead Social Booking Funnel"),
       quickWins: ["Add one-tap booking action buttons", "Optimize Google Business profile link"],
       strengthsFound: ["Established local reputation", "Positive review sentiment"],
       redFlags: [],

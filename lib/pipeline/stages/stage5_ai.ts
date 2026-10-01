@@ -2,6 +2,7 @@ import OpenAI from "openai";
 import { GoogleGenAI } from "@google/genai";
 import { EnrichedBusiness } from "./stage4_enrich";
 import { PIPELINE_CONFIG } from "../config";
+import { factCheckAndSanitizeGaps } from "../gapFactChecker";
 
 const openaiKey = process.env.OPENAI_API_KEY;
 const openai = openaiKey ? new OpenAI({ apiKey: openaiKey }) : null;
@@ -106,15 +107,30 @@ Never give generic advice. Return valid JSON only.`,
 }
 
 function sanitizeAnalysis(analysis: AIAnalysis, business: EnrichedBusiness): AIAnalysis {
+  const rawGaps = Array.isArray(analysis.gaps) && analysis.gaps.length > 0
+    ? (analysis.gaps as unknown as Array<Record<string, unknown>>)
+    : [];
+
+  const checkedGaps = factCheckAndSanitizeGaps(
+    rawGaps,
+    {
+      website: business.website,
+      rating: business.rating,
+      reviewCount: business.reviewCount,
+      phone: business.phone,
+      photoCount: business.photoCount,
+      unansweredNegativeReviews: business.unansweredNegativeReviews,
+    },
+    business.instagram
+  );
+
   return {
     opportunityScore: Math.min(100, Math.max(10, Number(analysis.opportunityScore) || 70)),
     urgencyLevel: ["low", "medium", "high", "critical"].includes(analysis.urgencyLevel)
       ? analysis.urgencyLevel
       : "high",
     estimatedMonthlyBudget: analysis.estimatedMonthlyBudget || "$1,000 - $2,500/mo",
-    gaps: Array.isArray(analysis.gaps) && analysis.gaps.length > 0
-      ? analysis.gaps
-      : buildFallbackAnalysis(business).gaps,
+    gaps: checkedGaps as unknown as AIAnalysis["gaps"],
     strengthsFound: Array.isArray(analysis.strengthsFound) ? analysis.strengthsFound : ["Established local presence"],
     competitorGap: analysis.competitorGap || "Competitors actively utilize short-form video & responsive booking funnels.",
     bestServiceToPitch: analysis.bestServiceToPitch || "Digital Presence & Content Funnel Architecture",
@@ -203,10 +219,10 @@ Return JSON with:
 
 function buildFallbackAnalysis(business: EnrichedBusiness): AIAnalysis {
   const score = Math.min(business.totalGapCount * 18, 92);
-  const gaps: AIAnalysis["gaps"] = [];
+  const rawGaps: AIAnalysis["gaps"] = [];
 
   if (business.gaps.noWebsite) {
-    gaps.push({
+    rawGaps.push({
       category: "Website Presence",
       problem: "No professional website or direct booking portal",
       impact: "Losing customers to competitors with frictionless online menus & booking",
@@ -216,7 +232,7 @@ function buildFallbackAnalysis(business: EnrichedBusiness): AIAnalysis {
   }
 
   if (business.gaps.fewPhotos) {
-    gaps.push({
+    rawGaps.push({
       category: "Visual Authority",
       problem: `Only ${business.photoCount} photos uploaded on Google listing`,
       impact: "High drop-off rate from browsing customers seeking ambiance and menus",
@@ -226,7 +242,7 @@ function buildFallbackAnalysis(business: EnrichedBusiness): AIAnalysis {
   }
 
   if (business.instagram.gaps.noInstagram || business.instagram.gaps.deadAccount) {
-    gaps.push({
+    rawGaps.push({
       category: "Social Engagement",
       problem: business.instagram.gaps.noInstagram ? "No active Instagram profile found" : "Instagram profile has been inactive for over 30 days",
       impact: "Missing viral reach and recurring local customer awareness",
@@ -235,21 +251,24 @@ function buildFallbackAnalysis(business: EnrichedBusiness): AIAnalysis {
     });
   }
 
-  if (gaps.length === 0) {
-    gaps.push({
-      category: "Digital Growth",
-      problem: "Under-optimized local SEO and short-form video presence",
-      impact: "Leaving top-of-funnel customer discovery on the table",
-      severity: "medium",
-      yourSolution: "Comprehensive local visibility audit and video marketing strategy",
-    });
-  }
+  const checkedGaps = factCheckAndSanitizeGaps(
+    rawGaps as unknown as Array<Record<string, unknown>>,
+    {
+      website: business.website,
+      rating: business.rating,
+      reviewCount: business.reviewCount,
+      phone: business.phone,
+      photoCount: business.photoCount,
+      unansweredNegativeReviews: business.unansweredNegativeReviews,
+    },
+    business.instagram
+  );
 
   return {
     opportunityScore: Math.max(50, score),
     urgencyLevel: score > 70 ? "critical" : score > 55 ? "high" : "medium",
     estimatedMonthlyBudget: business.budgetSignal === "high" ? "$1,500 - $3,500/mo" : "$600 - $1,200/mo",
-    gaps,
+    gaps: checkedGaps as unknown as AIAnalysis["gaps"],
     strengthsFound: [
       business.rating && business.rating > 4.0 ? `Solid ${business.rating}★ Google reputation` : "Established physical venue",
       business.reviewCount > 20 ? `${business.reviewCount} customer reviews` : "Authentic neighborhood presence",

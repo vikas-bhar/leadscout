@@ -131,11 +131,73 @@ function getStore(): MockStorage {
   return memoryStore;
 }
 
+function isDomOrNonSerializable(val: unknown): boolean {
+  if (!val || typeof val !== "object") return false;
+  const o = val as Record<string, unknown>;
+
+  if (
+    (typeof window !== "undefined" && (val instanceof HTMLElement || val instanceof Node || val instanceof Window)) ||
+    ("nodeType" in o && typeof o.nodeType === "number") ||
+    ("ownerDocument" in o)
+  ) {
+    return true;
+  }
+
+  if (
+    "_reactName" in o ||
+    "nativeEvent" in o ||
+    "dispatchConfig" in o ||
+    "stateNode" in o ||
+    "_owner" in o ||
+    ("type" in o && "props" in o && "key" in o && "ref" in o)
+  ) {
+    return true;
+  }
+
+  const cName = o.constructor?.name || "";
+  if (
+    cName.includes("HTML") ||
+    cName.includes("Element") ||
+    cName.includes("Node") ||
+    cName.includes("Window") ||
+    cName.includes("Event") ||
+    cName.includes("Fiber")
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+export function safeJsonStringify(obj: unknown): string {
+  const seen = new WeakSet();
+  return JSON.stringify(obj, (key, value) => {
+    if (key && (key.startsWith("__react") || key.startsWith("$$react"))) {
+      return undefined;
+    }
+
+    if (typeof value === "function") {
+      return undefined;
+    }
+
+    if (typeof value === "object" && value !== null) {
+      if (isDomOrNonSerializable(value)) {
+        return undefined;
+      }
+      if (seen.has(value)) {
+        return undefined;
+      }
+      seen.add(value);
+    }
+    return value;
+  });
+}
+
 function saveStore(data: MockStorage) {
   memoryStore = data;
   if (typeof window !== "undefined") {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      localStorage.setItem(STORAGE_KEY, safeJsonStringify(data));
       // Notify other components if needed
       window.dispatchEvent(new Event("freelancefind_store_updated"));
     } catch {

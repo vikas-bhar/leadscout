@@ -246,16 +246,48 @@ function sanitizeAgentAnalysis(
   };
 
   const rawGap = (raw.gapAnalysis || {}) as Record<string, unknown>;
+  const rawGapList = Array.isArray(rawGap.gaps) && rawGap.gaps.length > 0
+    ? (rawGap.gaps as AgentAnalysis["gapAnalysis"]["gaps"])
+    : fallback.gapAnalysis.gaps;
+
+  let cleanedGaps = rawGapList.filter(
+    (g) =>
+      !String(g.problem || "").toLowerCase().includes("none detected") &&
+      !String(g.category || "").toLowerCase().includes("clean opportunity") &&
+      !String(g.problem || "").toLowerCase().includes("no gap")
+  );
+
+  const hasNoWeb = !business.website || business.website === "NONE" || business.website.trim() === "";
+  if (hasNoWeb) {
+    if (!cleanedGaps.some((g) => String(g.category || "").toLowerCase().includes("website") || String(g.problem || "").toLowerCase().includes("website"))) {
+      cleanedGaps.unshift({
+        id: "gap_missing_website",
+        category: "Website & Mobile Funnel",
+        problem: "No official website or online reservation portal listed on Google Business Profile",
+        rootCause: "Relied solely on word-of-mouth without digital customer capture",
+        businessImpact: "Loses 100% of online search traffic to competitors with mobile booking sites",
+        estimatedRevenueLoss: "$1,500 - $4,000/mo",
+        severity: "high",
+        effortToFix: "medium",
+        yourSolution: "Build a high-converting mobile-first landing page with direct booking integration",
+        timeToResult: "5-7 days",
+        proofPoints: ["Increases online inquiry conversions by 35%+"],
+      });
+    }
+  }
+
+  if (cleanedGaps.length === 0) {
+    cleanedGaps = fallback.gapAnalysis.gaps;
+  }
+
   const gapAnalysis = {
     opportunityScore: typeof rawGap.opportunityScore === "number" ? rawGap.opportunityScore : fallback.gapAnalysis.opportunityScore,
     urgencyLevel: (["critical", "high", "medium", "low"].includes(rawGap.urgencyLevel as string)
       ? rawGap.urgencyLevel
       : "high") as "critical" | "high" | "medium" | "low",
     estimatedMonthlyBudget: (rawGap.estimatedMonthlyBudget as string) || fallback.gapAnalysis.estimatedMonthlyBudget,
-    gaps: Array.isArray(rawGap.gaps) && rawGap.gaps.length > 0
-      ? (rawGap.gaps as AgentAnalysis["gapAnalysis"]["gaps"])
-      : fallback.gapAnalysis.gaps,
-    priorityGap: (rawGap.priorityGap as string) || fallback.gapAnalysis.priorityGap,
+    gaps: cleanedGaps,
+    priorityGap: hasNoWeb ? "Missing Official Website & Mobile Funnel" : ((rawGap.priorityGap as string) || fallback.gapAnalysis.priorityGap),
     quickWins: Array.isArray(rawGap.quickWins) ? (rawGap.quickWins as string[]) : fallback.gapAnalysis.quickWins,
     strengthsFound: Array.isArray(rawGap.strengthsFound) ? (rawGap.strengthsFound as string[]) : fallback.gapAnalysis.strengthsFound,
     redFlags: Array.isArray(rawGap.redFlags) ? (rawGap.redFlags as string[]) : [],

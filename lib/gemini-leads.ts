@@ -107,10 +107,10 @@ Respond with JSON format matching:
       try {
         const response = await ai.models.generateContent({
           model: modelName,
-          contents: prompt,
+          contents: `${prompt}\nReturn ONLY a pure JSON object. No markdown backticks outside JSON.`,
           config: {
-            temperature: 0.2,
-            responseMimeType: "application/json",
+            tools: [{ googleSearch: {} }],
+            temperature: 0.1,
           },
         });
         if (response.text) {
@@ -118,7 +118,23 @@ Respond with JSON format matching:
           break;
         }
       } catch (e) {
-        console.log(`Gemini model ${modelName} call failed:`, e);
+        console.log(`Gemini model ${modelName} with search grounding call failed, trying without tools:`, e);
+        try {
+          const response = await ai.models.generateContent({
+            model: modelName,
+            contents: prompt,
+            config: {
+              temperature: 0.2,
+              responseMimeType: "application/json",
+            },
+          });
+          if (response.text) {
+            responseText = response.text;
+            break;
+          }
+        } catch (e2) {
+          console.log(`Gemini fallback model ${modelName} call failed:`, e2);
+        }
       }
     }
 
@@ -352,6 +368,16 @@ function generateHeuristicLocalBusinesses({
       },
     ];
 
+    const catLower = (cat + " " + city + " " + targetCountry).toLowerCase();
+    const isNoWebsiteMode =
+      catLower.includes("no website") ||
+      catLower.includes("without website") ||
+      catLower.includes("missing website") ||
+      catLower.includes("no site");
+
+    const hasSite = isNoWebsiteMode ? false : idx % 4 !== 0;
+    const siteUrl = hasSite ? `https://www.${name.toLowerCase().replace(/[^a-z0-9]/g, "")}.com` : null;
+
     return {
       id: `lead_${searchId}_${idx + 1}_${Math.random().toString(36).slice(2, 7)}`,
       searchId,
@@ -362,8 +388,8 @@ function generateHeuristicLocalBusinesses({
       location: cleanLocation,
       googleRating: Number((4.1 + (idx % 7) * 0.1).toFixed(1)),
       reviewCount: 38 + ((idx * 27) % 210),
-      hasWebsite: idx % 4 !== 0,
-      websiteUrl: idx % 4 !== 0 ? `https://www.${name.toLowerCase().replace(/[^a-z0-9]/g, "")}.com` : null,
+      hasWebsite: hasSite,
+      websiteUrl: siteUrl,
       phone: idx % 2 === 0 ? `+1 (512) 840-${1000 + idx * 77}` : null,
       photoCount: 12 + idx * 3,
       mapsUrl,

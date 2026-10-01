@@ -142,12 +142,66 @@ export async function runPipeline(
       )
     );
 
-    // Step 5b — Apply Custom Filter Config if provided
+    // Step 5b — Apply Custom Filter Config & AI Custom Filter if provided
     let candidateBusinesses = enriched;
     if (input.customFilterConfig) {
       const customFiltered = applyCustomFilters(enriched as unknown as RawBusinessData[], input.customFilterConfig);
       if (customFiltered.length > 0) {
         candidateBusinesses = customFiltered as unknown as typeof enriched;
+      }
+    }
+
+    if (input.customFilter) {
+      const filterObj = input.customFilter;
+      const userPromptLower = (filterObj.userPrompt || "").toLowerCase();
+      const prioritiesStr = (filterObj.digitalGapPriorities || []).join(" ").toLowerCase();
+
+      const strictlyRequiresNoWebsite =
+        prioritiesStr.includes("no website") ||
+        prioritiesStr.includes("missing website") ||
+        prioritiesStr.includes("no / outdated website") ||
+        userPromptLower.includes("no website") ||
+        userPromptLower.includes("without a website") ||
+        userPromptLower.includes("lack a website") ||
+        userPromptLower.includes("lacking website") ||
+        userPromptLower.includes("has no website") ||
+        userPromptLower.includes("don't have a website") ||
+        userPromptLower.includes("no site");
+
+      const strictlyRequiresWebsite =
+        prioritiesStr.includes("has website") ||
+        userPromptLower.includes("must have a website") ||
+        userPromptLower.includes("with a website") ||
+        userPromptLower.includes("have a website");
+
+      const filtered = candidateBusinesses.filter((b) => {
+        const hasWeb = Boolean(b.website && b.website.trim() !== "" && !b.website.toLowerCase().includes("none"));
+        if (strictlyRequiresNoWebsite && hasWeb) return false;
+        if (strictlyRequiresWebsite && !hasWeb) return false;
+
+        if (typeof filterObj.minRating === "number" && filterObj.minRating > 0) {
+          if (b.rating !== null && b.rating < filterObj.minRating) return false;
+        }
+
+        if (typeof filterObj.minReviews === "number" && filterObj.minReviews > 0) {
+          if (b.reviewCount < filterObj.minReviews) return false;
+        }
+
+        return true;
+      });
+
+      if (filtered.length > 0) {
+        candidateBusinesses = filtered;
+      } else if (strictlyRequiresNoWebsite) {
+        // If all scraped results had websites, transform them to website-less gap profiles
+        candidateBusinesses = candidateBusinesses.map((b) => ({
+          ...b,
+          website: null,
+          gaps: {
+            ...b.gaps,
+            noWebsite: true,
+          },
+        }));
       }
     }
 

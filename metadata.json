@@ -1,6 +1,6 @@
 {
   "name": "FreelanceFind",
-  "description": "Find local businesses with digital gaps, score the opportunity, and generate personalized outreach pitches.",
+  "description": "Turn local business digital gaps into paying freelance clients in 60 seconds with AI client scouting and automated outreach.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

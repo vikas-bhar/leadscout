@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireApiUser } from "@/lib/supabase";
 import { getCreditBalance } from "@/lib/credits";
 import { runPipeline, calculateCredits } from "@/lib/pipeline/masterPipeline";
+import { normalizeWebsiteUrl, isValidWebsiteUrl } from "@/lib/pipeline/cleaner";
 import type { Lead, CustomClientFilter, AgentAnalysis, PitchSet } from "@/types";
 import type { AIAnalysis } from "@/lib/pipeline/stages/stage5_ai";
 
@@ -133,18 +134,36 @@ export async function POST(request: NextRequest) {
       const an = lead.analysis as AIAnalysis & AgentAnalysis;
       const gapAnalysisObj = an.gapAnalysis || {};
       const pitchStrategyObj = an.pitchStrategy || {};
+      const validWeb = normalizeWebsiteUrl(lead.business.website);
+      const hasWeb = Boolean(validWeb && isValidWebsiteUrl(validWeb) && !lead.business.gaps.noWebsite);
       const rawGaps = an.gaps || gapAnalysisObj.gaps || [];
 
-      const gaps = rawGaps.map((g) => {
-        const gObj = g as Record<string, unknown>;
-        return {
-          category: (gObj.category as string) || "General Gap",
-          problem: (gObj.problem as string) || "",
-          impact: (gObj.impact as string) || (gObj.businessImpact as string) || "",
-          severity: (((gObj.severity as string) === "critical" ? "high" : gObj.severity) as "low" | "medium" | "high") || "medium",
-          yourSolution: (gObj.yourSolution as string) || "",
-        };
-      });
+      const gaps = rawGaps
+        .filter((g) => {
+          const prob = String((g as Record<string, unknown>).problem || "").toLowerCase();
+          const cat = String((g as Record<string, unknown>).category || "").toLowerCase();
+          return !prob.includes("none detected") && !cat.includes("clean opportunity") && !prob.includes("no gap");
+        })
+        .map((g) => {
+          const gObj = g as Record<string, unknown>;
+          return {
+            category: (gObj.category as string) || "General Gap",
+            problem: (gObj.problem as string) || "",
+            impact: (gObj.impact as string) || (gObj.businessImpact as string) || "",
+            severity: (((gObj.severity as string) === "critical" ? "high" : gObj.severity) as "low" | "medium" | "high") || "medium",
+            yourSolution: (gObj.yourSolution as string) || "",
+          };
+        });
+
+      if (!hasWeb && !gaps.some((g) => g.category.toLowerCase().includes("website") || g.problem.toLowerCase().includes("website"))) {
+        gaps.unshift({
+          category: "Website & Mobile Funnel",
+          problem: "No official website or online reservation portal listed on Google Business Profile",
+          impact: "Loses 100% of online search visitors to competitors with mobile booking sites",
+          severity: "high",
+          yourSolution: "Design and launch a modern, mobile-first responsive website",
+        });
+      }
 
       const pitchSet = lead.pitches as unknown as PitchSet;
       const pitchBundle = {
@@ -188,8 +207,8 @@ export async function POST(request: NextRequest) {
         location: lead.business.address,
         googleRating: lead.business.rating ?? 4.0,
         reviewCount: lead.business.reviewCount,
-        hasWebsite: !lead.business.gaps.noWebsite,
-        websiteUrl: lead.business.website,
+        hasWebsite: hasWeb,
+        websiteUrl: hasWeb ? validWeb : null,
         phone: lead.business.phone,
         photoCount: lead.business.photoCount,
         mapsUrl: lead.business.mapsUrl,

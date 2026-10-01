@@ -25,7 +25,7 @@ import {
   type CustomClientFilter,
 } from "@/types";
 import { calculateSearchCost } from "@/lib/credit-calc";
-import { saveLocalLeads, saveLocalSearch, deductLocalCredits, getLocalBalance } from "@/lib/local-store";
+import { saveLocalLeads, saveLocalSearch, deductLocalCredits, getLocalBalance, safeJsonStringify } from "@/lib/local-store";
 import {
   LocationFilter,
   buildSearchLocationString,
@@ -272,7 +272,7 @@ export function SearchView({
       const response = await fetch("/api/search/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+        body: safeJsonStringify({
           location: searchTargetLocation,
           businessCategory: searchCategory,
           freelancerType: searchFreelancerType,

@@ -38,7 +38,7 @@ export function cleanMapsData(raw: Record<string, unknown> = {}): CleanedMapsDat
   const city = toStr(raw.city || raw.addressLocality || extractCity(address));
   const country = toStr(raw.countryCode || raw.country || raw.addressCountry).toUpperCase();
   const rawWeb = toStr(raw.website || raw.url || raw.websiteUrl);
-  const website = isValidUrl(rawWeb) ? normalizeUrl(rawWeb) : null;
+  const website = normalizeWebsiteUrl(rawWeb);
   const rawPhone = toStr(raw.phone || raw.phoneNumber || raw.phoneUnformatted || raw.internationalPhoneNumber);
   const phone = rawPhone ? rawPhone.replace(/[\s\-\(\)\.]/g, "") : null;
 
@@ -145,19 +145,72 @@ function calculateConfidence(ig: Record<string, unknown>, businessName: string):
   return Math.min(score, 1.0);
 }
 
-function normalizeUrl(url: string): string {
+export function isValidWebsiteUrl(url: unknown): boolean {
+  if (!url || typeof url !== "string") return false;
+  const trimmed = url.trim().toLowerCase();
+
+  // Reject empty string or common placeholders
+  if (
+    !trimmed ||
+    trimmed === "none" ||
+    trimmed === "n/a" ||
+    trimmed === "na" ||
+    trimmed === "null" ||
+    trimmed === "undefined" ||
+    trimmed === "no website" ||
+    trimmed === "nowebsite" ||
+    trimmed === "http" ||
+    trimmed === "https" ||
+    trimmed === "http://" ||
+    trimmed === "https://" ||
+    trimmed === "false" ||
+    trimmed === "true"
+  ) {
+    return false;
+  }
+
+  // Verification step: MUST start with a proper http:// or https:// prefix
+  if (!trimmed.startsWith("http://") && !trimmed.startsWith("https://")) {
+    return false;
+  }
+
   try {
-    return new URL(url.startsWith("http") ? url : `https://${url}`).href;
+    const parsed = new URL(trimmed);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return false;
+    }
+    const hostname = parsed.hostname;
+    if (!hostname || hostname === "none" || hostname === "null" || !hostname.includes(".")) {
+      return false;
+    }
+    const parts = hostname.split(".");
+    const tld = parts[parts.length - 1];
+    if (!tld || tld.length < 2 || !/^[a-z0-9]+$/i.test(tld)) {
+      return false;
+    }
+    return true;
   } catch {
-    return url;
+    return false;
   }
 }
 
-function isValidUrl(url: string): boolean {
+export function normalizeWebsiteUrl(url: unknown): string | null {
+  if (!url || typeof url !== "string") return null;
+  let trimmed = url.trim();
+
+  // If prefix is omitted, prepend https:// for verification
+  if (!trimmed.toLowerCase().startsWith("http://") && !trimmed.toLowerCase().startsWith("https://")) {
+    trimmed = `https://${trimmed}`;
+  }
+
+  if (!isValidWebsiteUrl(trimmed)) {
+    return null;
+  }
+
   try {
-    return Boolean(new URL(url.startsWith("http") ? url : `https://${url}`));
+    return new URL(trimmed).href;
   } catch {
-    return false;
+    return null;
   }
 }
 

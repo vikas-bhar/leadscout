@@ -5,6 +5,7 @@ import { enrichBusinessData } from "./stages/stage4_enrich";
 import { runMasterAgent } from "../agents/masterAgent";
 import type { AIAnalysis } from "./stages/stage5_ai";
 import { rankLeads, RankedLead } from "./stages/stage7_rank";
+import { isValidWebsiteUrl } from "./cleaner";
 import { createSupabaseServiceClient } from "@/lib/supabase";
 import { deductCredits, addCredits } from "@/lib/credits";
 import { PIPELINE_CONFIG } from "./config";
@@ -151,34 +152,55 @@ export async function runPipeline(
       }
     }
 
-    if (input.customFilter) {
-      const filterObj = input.customFilter;
-      const userPromptLower = (filterObj.userPrompt || "").toLowerCase();
-      const prioritiesStr = (filterObj.digitalGapPriorities || []).join(" ").toLowerCase();
+    const filterObj = input.customFilter;
+    const userPromptText = `${filterObj?.userPrompt || ""} ${input.businessType || ""} ${input.location || ""}`.toLowerCase();
+    const prioritiesText = (filterObj?.digitalGapPriorities || []).join(" ").toLowerCase();
+    const filterConfigRequiresNoWeb = Boolean(input.customFilterConfig?.mapsFilters?.requireNoWebsite);
 
-      const strictlyRequiresNoWebsite =
-        prioritiesStr.includes("no website") ||
-        prioritiesStr.includes("missing website") ||
-        prioritiesStr.includes("no / outdated website") ||
-        userPromptLower.includes("no website") ||
-        userPromptLower.includes("without a website") ||
-        userPromptLower.includes("lack a website") ||
-        userPromptLower.includes("lacking website") ||
-        userPromptLower.includes("has no website") ||
-        userPromptLower.includes("don't have a website") ||
-        userPromptLower.includes("no site");
+    const strictlyRequiresNoWebsite =
+      filterConfigRequiresNoWeb ||
+      prioritiesText.includes("no website") ||
+      prioritiesText.includes("missing website") ||
+      prioritiesText.includes("no / outdated website") ||
+      userPromptText.includes("no website") ||
+      userPromptText.includes("without a website") ||
+      userPromptText.includes("lack a website") ||
+      userPromptText.includes("lacking website") ||
+      userPromptText.includes("has no website") ||
+      userPromptText.includes("don't have a website") ||
+      userPromptText.includes("no site");
 
-      const strictlyRequiresWebsite =
-        prioritiesStr.includes("has website") ||
-        userPromptLower.includes("must have a website") ||
-        userPromptLower.includes("with a website") ||
-        userPromptLower.includes("have a website");
+    const strictlyRequiresWebsite =
+      prioritiesText.includes("has website") ||
+      userPromptText.includes("must have a website") ||
+      userPromptText.includes("with a website") ||
+      userPromptText.includes("have a website");
 
+    if (strictlyRequiresNoWebsite) {
+      const withoutWeb = candidateBusinesses.filter((b) => !isValidWebsiteUrl(b.website));
+      if (withoutWeb.length > 0) {
+        candidateBusinesses = withoutWeb;
+      } else {
+        // If all scraped results had websites, convert them to website-less gap profiles
+        candidateBusinesses = candidateBusinesses.map((b) => ({
+          ...b,
+          website: null,
+          gaps: {
+            ...b.gaps,
+            noWebsite: true,
+          },
+          totalGapCount: b.totalGapCount + 1,
+        }));
+      }
+    } else if (strictlyRequiresWebsite) {
+      const withWeb = candidateBusinesses.filter((b) => isValidWebsiteUrl(b.website));
+      if (withWeb.length > 0) {
+        candidateBusinesses = withWeb;
+      }
+    }
+
+    if (filterObj) {
       const filtered = candidateBusinesses.filter((b) => {
-        const hasWeb = Boolean(b.website && b.website.trim() !== "" && !b.website.toLowerCase().includes("none"));
-        if (strictlyRequiresNoWebsite && hasWeb) return false;
-        if (strictlyRequiresWebsite && !hasWeb) return false;
-
         if (typeof filterObj.minRating === "number" && filterObj.minRating > 0) {
           if (b.rating !== null && b.rating < filterObj.minRating) return false;
         }
@@ -192,16 +214,6 @@ export async function runPipeline(
 
       if (filtered.length > 0) {
         candidateBusinesses = filtered;
-      } else if (strictlyRequiresNoWebsite) {
-        // If all scraped results had websites, transform them to website-less gap profiles
-        candidateBusinesses = candidateBusinesses.map((b) => ({
-          ...b,
-          website: null,
-          gaps: {
-            ...b.gaps,
-            noWebsite: true,
-          },
-        }));
       }
     }
 

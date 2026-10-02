@@ -86,6 +86,20 @@ export function detectLinkType(url: string): DetectedLink {
     };
   }
 
+  // If input contains spaces or does not look like a URL domain, treat as Location/Business query
+  const hasUrlPrefix = /^(https?:\/\/|www\.)/i.test(trimmed);
+  const isLikelyDomain = !trimmed.includes(" ") && trimmed.includes(".") && trimmed.length > 3;
+
+  if (!hasUrlPrefix && !isLikelyDomain) {
+    return {
+      type: "maps",
+      domain: "maps.google.com",
+      cleanUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(trimmed)}`,
+      originalUrl: url,
+      displayName: trimmed,
+    };
+  }
+
   // Auto-prepend https:// if missing
   const withProto =
     trimmed.startsWith("http://") || trimmed.startsWith("https://")

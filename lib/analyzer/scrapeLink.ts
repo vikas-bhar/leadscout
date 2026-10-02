@@ -431,7 +431,7 @@ export async function scrapeLinkData(detected: DetectedLink): Promise<ScrapedLin
         try {
           const ai = new GoogleGenAI({ apiKey: geminiApiKey });
           const response = await ai.models.generateContent({
-            model: "gemini-3.8-flash",
+            model: "gemini-2.5-flash",
             contents: `Identify the real commercial establishment corresponding to this Google Maps query/URL: "${placeQuery}" (${detected.cleanUrl}).
 Return a JSON object with accurate real-world data:
 {

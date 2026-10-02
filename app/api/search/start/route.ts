@@ -22,6 +22,8 @@ const searchRequestSchema = z.object({
   specificPlace: z.string().optional(),
   excludeNames: z.array(z.string()).optional(),
   excludePlaceIds: z.array(z.string()).optional(),
+  filters: z.any().optional(),
+  searchFilters: z.any().optional(),
   customFilter: z.any().optional(),
   customPromptConfig: z.any().optional(),
   customFilterConfig: z.any().optional(),
@@ -33,6 +35,7 @@ export async function POST(request: NextRequest) {
     if (!auth.user) return auth.response;
 
     const body = await request.json();
+    console.log("SEARCH START - filters received:", JSON.stringify(body.filters || body.searchFilters || {}));
     const parsed = searchRequestSchema.parse(body);
 
     let targetResults = parsed.resultCount;
@@ -100,6 +103,7 @@ export async function POST(request: NextRequest) {
         resultCount: targetResults,
         excludeNames: parsed.excludeNames,
         excludePlaceIds: parsed.excludePlaceIds,
+        searchFilters: parsed.filters || parsed.searchFilters,
         customFilter,
         customPromptConfig: parsed.customPromptConfig,
         customFilterConfig: parsed.customFilterConfig,

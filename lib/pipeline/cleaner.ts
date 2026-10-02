@@ -1,5 +1,7 @@
 // Raw data cleaner and normalizer for Maps and Instagram scraping
 
+import { extractWebsite } from "@/lib/gmap/websiteExtractor";
+
 export interface CleanedMapsData {
   placeId: string;
   name: string;
@@ -37,8 +39,7 @@ export function cleanMapsData(raw: Record<string, unknown> = {}): CleanedMapsDat
   const address = toStr(raw.address || raw.formattedAddress || raw.vicinity || raw.street);
   const city = toStr(raw.city || raw.addressLocality || extractCity(address));
   const country = toStr(raw.countryCode || raw.country || raw.addressCountry).toUpperCase();
-  const rawWeb = toStr(raw.website || raw.url || raw.websiteUrl);
-  const website = normalizeWebsiteUrl(rawWeb);
+  const website = extractWebsite(raw);
   const rawPhone = toStr(raw.phone || raw.phoneNumber || raw.phoneUnformatted || raw.internationalPhoneNumber);
   const phone = rawPhone ? rawPhone.replace(/[\s\-\(\)\.]/g, "") : null;
 

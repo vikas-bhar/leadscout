@@ -118,6 +118,33 @@ export const BUSINESS_CATEGORIES = [
   "Photography studio",
 ] as const;
 
+export interface InstagramFilters {
+  requireNoInstagram: boolean | null;
+  requireInstagram: boolean | null;
+  minFollowers: number | null;
+  maxFollowers: number | null;
+  minDaysSincePost: number | null;
+  maxEngagementRate: number | null;
+  requireNoReels: boolean | null;
+  requireNoLinkInBio: boolean | null;
+}
+
+export interface SearchFilters {
+  requireNoWebsite: boolean | null;
+  requireWebsite: boolean | null;
+  minRating: number | null;
+  maxRating: number | null;
+  minReviews: number | null;
+  maxReviews: number | null;
+  maxPhotos: number | null;
+  priceLevel: string[];
+  keywordsInName: string[];
+  keywordsToExclude: string[];
+  requireVerified: boolean | null;
+  requireUnansweredReviews: boolean | null;
+  instagram: InstagramFilters | null;
+}
+
 export interface CustomClientFilter {
   userPrompt: string;
   nicheFocus: string;

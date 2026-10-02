@@ -269,6 +269,39 @@ export function SearchView({
         });
       }
 
+      const customGapText = (customFilter?.digitalGapPriorities || []).join(" ").toLowerCase();
+      const customPromptText = (customFilter?.userPrompt || "").toLowerCase();
+      const isNoWebsiteSelected =
+        selectedFilterId === "filter_no_website" ||
+        Boolean(activeFilterConfig?.mapsFilters?.requireNoWebsite) ||
+        customGapText.includes("no website") ||
+        customGapText.includes("missing website") ||
+        customGapText.includes("without website") ||
+        customGapText.includes("outdated website") ||
+        customPromptText.includes("no website") ||
+        customPromptText.includes("without a website") ||
+        customPromptText.includes("lack a website") ||
+        customPromptText.includes("lacking website") ||
+        customPromptText.includes("no site");
+
+      const isHasWebsiteSelected = selectedFilterId === "filter_has_website" || Boolean(activeFilterConfig?.mapsFilters?.requireWebsite);
+
+      const searchFiltersObj = {
+        requireNoWebsite: isNoWebsiteSelected ? true : null,
+        requireWebsite: isHasWebsiteSelected ? true : null,
+        minRating: activeFilterConfig?.mapsFilters?.minRating ?? customFilter?.minRating ?? null,
+        maxRating: activeFilterConfig?.mapsFilters?.maxRating ?? null,
+        minReviews: activeFilterConfig?.mapsFilters?.minReviews ?? customFilter?.minReviews ?? 3,
+        maxReviews: activeFilterConfig?.mapsFilters?.maxReviews ?? null,
+        maxPhotos: activeFilterConfig?.mapsFilters?.maxPhotos ?? null,
+        priceLevel: activeFilterConfig?.mapsFilters?.priceLevel || [],
+        keywordsInName: activeFilterConfig?.mapsFilters?.keywordsInName || [],
+        keywordsToExclude: activeFilterConfig?.mapsFilters?.keywordsToExclude || customFilter?.exclusionKeywords || [],
+        requireVerified: activeFilterConfig?.mapsFilters?.requireVerified ?? null,
+        requireUnansweredReviews: activeFilterConfig?.mapsFilters?.requireUnansweredReviews ?? null,
+        instagram: activeFilterConfig?.instagramFilters || null,
+      };
+
       const response = await fetch("/api/search/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -281,6 +314,7 @@ export function SearchView({
           countryCode: searchCountryCode,
           city: searchCity,
           place: searchPlace,
+          filters: searchFiltersObj,
           customFilter: customFilter || undefined,
           customPromptConfig: activePromptConfig || undefined,
           customFilterConfig: activeFilterConfig || undefined,

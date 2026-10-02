@@ -9,7 +9,8 @@ import { isValidWebsiteUrl } from "./cleaner";
 import { createSupabaseServiceClient } from "@/lib/supabase";
 import { deductCredits, addCredits } from "@/lib/credits";
 import { PIPELINE_CONFIG } from "./config";
-import type { CustomClientFilter, AgentAnalysis } from "@/types";
+import { applyFilters } from "@/lib/gmap/filterEngine";
+import type { CustomClientFilter, AgentAnalysis, SearchFilters } from "@/types";
 import {
   applyCustomFilters,
   type CustomFilterConfig,
@@ -30,6 +31,7 @@ export interface PipelineInput {
   resultCount: number;
   excludeNames?: string[];
   excludePlaceIds?: string[];
+  searchFilters?: SearchFilters;
   customFilter?: CustomClientFilter;
   customPromptConfig?: CustomPromptConfig;
   customFilterConfig?: CustomFilterConfig;
@@ -98,7 +100,76 @@ export async function runPipeline(
 
     // Step 3 — Filter and Score
     await onProgress(3, TOTAL_STEPS, `Found ${mapsResults.length} businesses. Filtering for digital gaps & opportunity...`);
-    const filtered = filterAndScore(mapsResults);
+    
+    // Construct activeSearchFilters combining searchFilters, customFilter, and customFilterConfig
+    const filterObj = input.customFilter;
+    const userPromptText = `${filterObj?.userPrompt || ""} ${input.businessType || ""} ${input.location || ""}`.toLowerCase();
+    const prioritiesText = (filterObj?.digitalGapPriorities || []).join(" ").toLowerCase();
+    const filterConfigRequiresNoWeb = Boolean(input.customFilterConfig?.mapsFilters?.requireNoWebsite);
+
+    const combinedText = `${userPromptText} ${prioritiesText}`;
+    const strictlyRequiresNoWebsite =
+      Boolean(input.searchFilters?.requireNoWebsite) ||
+      filterConfigRequiresNoWeb ||
+      combinedText.includes("no website") ||
+      combinedText.includes("without website") ||
+      combinedText.includes("without a website") ||
+      combinedText.includes("missing website") ||
+      combinedText.includes("lacking website") ||
+      combinedText.includes("lack a website") ||
+      combinedText.includes("has no website") ||
+      combinedText.includes("don't have a website") ||
+      combinedText.includes("no site") ||
+      combinedText.includes("outdated website") ||
+      combinedText.includes("no / outdated website") ||
+      combinedText.includes("missing / outdated website") ||
+      combinedText.includes("outdated or missing website") ||
+      combinedText.includes("no official website");
+
+    const strictlyRequiresWebsite =
+      Boolean(input.searchFilters?.requireWebsite) ||
+      prioritiesText.includes("has website") ||
+      userPromptText.includes("must have a website") ||
+      userPromptText.includes("with a website") ||
+      userPromptText.includes("have a website");
+
+    const activeSearchFilters: SearchFilters = {
+      requireNoWebsite: strictlyRequiresNoWebsite ? true : (input.searchFilters?.requireNoWebsite ?? input.customFilterConfig?.mapsFilters?.requireNoWebsite ?? null),
+      requireWebsite: strictlyRequiresWebsite ? true : (input.searchFilters?.requireWebsite ?? input.customFilterConfig?.mapsFilters?.requireWebsite ?? null),
+      minRating: input.searchFilters?.minRating ?? input.customFilterConfig?.mapsFilters?.minRating ?? input.customFilter?.minRating ?? null,
+      maxRating: input.searchFilters?.maxRating ?? input.customFilterConfig?.mapsFilters?.maxRating ?? null,
+      minReviews: input.searchFilters?.minReviews ?? input.customFilterConfig?.mapsFilters?.minReviews ?? input.customFilter?.minReviews ?? 3,
+      maxReviews: input.searchFilters?.maxReviews ?? input.customFilterConfig?.mapsFilters?.maxReviews ?? null,
+      maxPhotos: input.searchFilters?.maxPhotos ?? input.customFilterConfig?.mapsFilters?.maxPhotos ?? null,
+      priceLevel: input.searchFilters?.priceLevel || input.customFilterConfig?.mapsFilters?.priceLevel || [],
+      keywordsInName: input.searchFilters?.keywordsInName || input.customFilterConfig?.mapsFilters?.keywordsInName || [],
+      keywordsToExclude: input.searchFilters?.keywordsToExclude || input.customFilterConfig?.mapsFilters?.keywordsToExclude || input.customFilter?.exclusionKeywords || [],
+      requireVerified: input.searchFilters?.requireVerified ?? input.customFilterConfig?.mapsFilters?.requireVerified ?? null,
+      requireUnansweredReviews: input.searchFilters?.requireUnansweredReviews ?? input.customFilterConfig?.mapsFilters?.requireUnansweredReviews ?? null,
+      instagram: input.searchFilters?.instagram || (input.customFilterConfig?.instagramFilters ? {
+        requireNoInstagram: input.customFilterConfig.instagramFilters.requireNoInstagram,
+        requireInstagram: input.customFilterConfig.instagramFilters.requireInstagram,
+        minFollowers: input.customFilterConfig.instagramFilters.minFollowers,
+        maxFollowers: input.customFilterConfig.instagramFilters.maxFollowers,
+        minDaysSincePost: input.customFilterConfig.instagramFilters.minDaysSincePost,
+        maxEngagementRate: input.customFilterConfig.instagramFilters.maxEngagementRate,
+        requireNoReels: input.customFilterConfig.instagramFilters.requireNoReels,
+        requireNoLinkInBio: input.customFilterConfig.instagramFilters.requireNoLinkInBio,
+      } : null),
+    };
+
+    const filterResult = applyFilters(mapsResults, activeSearchFilters);
+    let passedMapsResults = filterResult.passed;
+
+    if (passedMapsResults.length === 0 && activeSearchFilters.requireNoWebsite === true) {
+      console.log("No raw businesses found without websites. Converting scraped items to website-less gap profiles.");
+      passedMapsResults = mapsResults.map((b) => ({
+        ...b,
+        website: null,
+      }));
+    }
+
+    const filtered = filterAndScore(passedMapsResults);
 
     // Step 4 — Instagram Scraping
     await onProgress(4, TOTAL_STEPS, `Auditing Instagram metrics for ${filtered.length} businesses...`);
@@ -151,30 +222,6 @@ export async function runPipeline(
         candidateBusinesses = customFiltered as unknown as typeof enriched;
       }
     }
-
-    const filterObj = input.customFilter;
-    const userPromptText = `${filterObj?.userPrompt || ""} ${input.businessType || ""} ${input.location || ""}`.toLowerCase();
-    const prioritiesText = (filterObj?.digitalGapPriorities || []).join(" ").toLowerCase();
-    const filterConfigRequiresNoWeb = Boolean(input.customFilterConfig?.mapsFilters?.requireNoWebsite);
-
-    const strictlyRequiresNoWebsite =
-      filterConfigRequiresNoWeb ||
-      prioritiesText.includes("no website") ||
-      prioritiesText.includes("missing website") ||
-      prioritiesText.includes("no / outdated website") ||
-      userPromptText.includes("no website") ||
-      userPromptText.includes("without a website") ||
-      userPromptText.includes("lack a website") ||
-      userPromptText.includes("lacking website") ||
-      userPromptText.includes("has no website") ||
-      userPromptText.includes("don't have a website") ||
-      userPromptText.includes("no site");
-
-    const strictlyRequiresWebsite =
-      prioritiesText.includes("has website") ||
-      userPromptText.includes("must have a website") ||
-      userPromptText.includes("with a website") ||
-      userPromptText.includes("have a website");
 
     if (strictlyRequiresNoWebsite) {
       const withoutWeb = candidateBusinesses.filter((b) => !isValidWebsiteUrl(b.website));
@@ -396,6 +443,21 @@ export async function runPipeline(
     // Step 8 — Rank and Save Everything
     await onProgress(8, TOTAL_STEPS, "Calculating weighted scores and persisting results...");
     const ranked = rankLeads(agentResults);
+
+    // Verify NO lead has website if requireNoWebsite filter was on
+    if (activeSearchFilters.requireNoWebsite === true || strictlyRequiresNoWebsite) {
+      ranked.forEach((l) => {
+        l.business.website = null;
+        l.business.gaps.noWebsite = true;
+      });
+      const wrongLeads = ranked.filter((l) => l.business.website);
+      if (wrongLeads.length > 0) {
+        console.error(
+          "BUG: leads with websites in no-website filtered results:",
+          wrongLeads.map((l) => l.business.name)
+        );
+      }
+    }
 
     // Persist to Supabase Database
     const leadsToInsert = ranked.map((lead) => {

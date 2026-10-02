@@ -368,11 +368,14 @@ function generateHeuristicLocalBusinesses({
       },
     ];
 
-    const catLower = (cat + " " + city + " " + targetCountry).toLowerCase();
+    const catLower = (cat + " " + city + " " + targetCountry + " " + targetArea + " " + (freelancerType || "")).toLowerCase();
     const isNoWebsiteMode =
       catLower.includes("no website") ||
       catLower.includes("without website") ||
       catLower.includes("missing website") ||
+      catLower.includes("lack website") ||
+      catLower.includes("lacking website") ||
+      catLower.includes("outdated website") ||
       catLower.includes("no site");
 
     const hasSite = isNoWebsiteMode ? false : idx % 4 !== 0;

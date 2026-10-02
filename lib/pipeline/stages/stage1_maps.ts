@@ -316,9 +316,18 @@ export async function scrapeGoogleMaps(
   const categoryPart = searchQuery.includes(" in ") ? searchQuery.split(" in ")[0] : "Business";
   const locationPart = searchQuery.includes(" in ") ? searchQuery.split(" in ")[1] : searchQuery;
   
+  const sqLower = searchQuery.toLowerCase();
+  const isNoWebRequested =
+    sqLower.includes("no website") ||
+    sqLower.includes("without website") ||
+    sqLower.includes("missing website") ||
+    sqLower.includes("lack website") ||
+    sqLower.includes("no site");
+
   const generated = Array.from({ length: Math.min(maxResults, 6) }).map((_, idx) => {
     const offset = Math.floor(Math.random() * 20);
     const brandName = `${["The Premier", "Elite", "Urban", "Signature", "Heritage", "Central", "Apex", "Vanguard", "Noble", "Pinnacle"][ (idx + offset) % 10]} ${categoryPart}`;
+    const siteUrl = isNoWebRequested ? null : `https://www.${brandName.toLowerCase().replace(/[^a-z0-9]/g, "")}.com`;
     return {
       placeId: `gm_auto_${Date.now()}_${idx}`,
       name: brandName,
@@ -328,7 +337,7 @@ export async function scrapeGoogleMaps(
       country: "",
       rating: 4.1 + (idx % 5) * 0.1,
       reviewCount: 35 + idx * 18,
-      website: `https://www.${brandName.toLowerCase().replace(/[^a-z0-9]/g, "")}.com`,
+      website: siteUrl,
       phone: `+1 (555) 019-${1000 + idx * 88}`,
       photoCount: 8 + idx * 4,
       hasHours: true,

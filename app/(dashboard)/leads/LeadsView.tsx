@@ -681,11 +681,14 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
           .toLowerCase();
 
         if (filterGap === "missing_website") {
-          return (
-            !l.hasWebsite ||
-            !l.websiteUrl ||
-            /website|no web|online presence|domain|landing page/i.test(allGapText)
+          const hasRealWebsite = Boolean(
+            l.hasWebsite &&
+              l.websiteUrl &&
+              l.websiteUrl.trim() !== "" &&
+              l.websiteUrl.trim().toLowerCase() !== "null" &&
+              !l.websiteUrl.toLowerCase().includes("none")
           );
+          return !hasRealWebsite;
         }
         if (filterGap === "mobile_ux") {
           return (

@@ -250,13 +250,23 @@ export async function POST(request: NextRequest) {
 
     const updatedBalance = await getCreditBalance(auth.user.id, auth.supabase);
 
+    const isNoWebFilterOn =
+      Boolean(parsed.filters?.requireNoWebsite) ||
+      Boolean(parsed.searchFilters?.requireNoWebsite) ||
+      Boolean(parsed.customFilterConfig?.mapsFilters?.requireNoWebsite) ||
+      Boolean(customFilter?.digitalGapPriorities?.some((p: string) => p.toLowerCase().includes("no website")));
+
+    const finalLeads = isNoWebFilterOn
+      ? formattedLeads.filter((l) => !isValidWebsiteUrl(l.websiteUrl) && !l.hasWebsite)
+      : formattedLeads;
+
     return NextResponse.json({
       success: true,
       searchId,
-      resultsCount: formattedLeads.length,
+      resultsCount: finalLeads.length,
       creditsUsed: pipelineResult.creditsUsed,
       newBalance: updatedBalance?.availableCredits ?? (available - pipelineResult.creditsUsed),
-      leads: formattedLeads,
+      leads: finalLeads,
       search: {
         id: searchId,
         user_id: auth.user.id,

@@ -1,4 +1,4 @@
-import { scrapeGoogleMaps } from "./stages/stage1_maps";
+import { scrapeGoogleMaps, MapsResult } from "./stages/stage1_maps";
 import { filterAndScore } from "./stages/stage2_filter";
 import { scrapeInstagram } from "./stages/stage3_instagram";
 import { enrichBusinessData } from "./stages/stage4_enrich";
@@ -6,11 +6,13 @@ import { runMasterAgent } from "../agents/masterAgent";
 import type { AIAnalysis } from "./stages/stage5_ai";
 import { rankLeads, RankedLead } from "./stages/stage7_rank";
 import { isValidWebsiteUrl } from "./cleaner";
+import { findRealBusinessesWithGemini } from "@/lib/gemini-leads";
+import { extractWebsite } from "@/lib/gmap/websiteExtractor";
 import { createSupabaseServiceClient } from "@/lib/supabase";
 import { deductCredits, addCredits } from "@/lib/credits";
 import { PIPELINE_CONFIG } from "./config";
 import { applyFilters } from "@/lib/gmap/filterEngine";
-import type { CustomClientFilter, AgentAnalysis, SearchFilters } from "@/types";
+import type { CustomClientFilter, AgentAnalysis, SearchFilters, FreelancerType } from "@/types";
 import {
   applyCustomFilters,
   type CustomFilterConfig,
@@ -162,11 +164,40 @@ export async function runPipeline(
     let passedMapsResults = filterResult.passed;
 
     if (passedMapsResults.length === 0 && activeSearchFilters.requireNoWebsite === true) {
-      console.log("No raw businesses found without websites. Converting scraped items to website-less gap profiles.");
-      passedMapsResults = mapsResults.map((b) => ({
-        ...b,
-        website: null,
-      }));
+      console.log("No raw businesses found without websites from initial scraper. Querying Gemini AI Grounding specifically for businesses lacking websites.");
+      const noWebGrounded = await findRealBusinessesWithGemini({
+        searchId: input.searchId,
+        userId: input.userId,
+        businessCategory: input.businessType,
+        location: input.location || "Local Area",
+        freelancerType: (input.freelancerType || "social_media_manager") as FreelancerType,
+        count: 10,
+        requireNoWebsite: true,
+      });
+
+      if (noWebGrounded && noWebGrounded.length > 0) {
+        passedMapsResults = noWebGrounded.map((b, idx): MapsResult => ({
+          placeId: b.id || `noweb_${Date.now()}_${idx}`,
+          name: b.businessName,
+          category: b.businessCategory || input.businessType,
+          address: b.location || input.location || "Local Area",
+          city: (input.location || "").split(",")[0] || "",
+          country: "",
+          rating: b.googleRating ?? 4.2,
+          reviewCount: b.reviewCount ?? 35,
+          website: null,
+          phone: b.phone || null,
+          photoCount: b.photoCount ?? 6,
+          hasHours: true,
+          isVerified: false,
+          mapsUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${b.businessName}, ${input.location || ""}`)}`,
+          coordinates: null,
+          reviews: [],
+          unansweredNegativeReviews: 1,
+          priceLevel: "$$",
+          openNow: true,
+        }));
+      }
     }
 
     const filtered = filterAndScore(passedMapsResults);
@@ -223,27 +254,16 @@ export async function runPipeline(
       }
     }
 
-    if (strictlyRequiresNoWebsite) {
-      const withoutWeb = candidateBusinesses.filter((b) => !isValidWebsiteUrl(b.website));
-      if (withoutWeb.length > 0) {
-        candidateBusinesses = withoutWeb;
-      } else {
-        // If all scraped results had websites, convert them to website-less gap profiles
-        candidateBusinesses = candidateBusinesses.map((b) => ({
-          ...b,
-          website: null,
-          gaps: {
-            ...b.gaps,
-            noWebsite: true,
-          },
-          totalGapCount: b.totalGapCount + 1,
-        }));
-      }
-    } else if (strictlyRequiresWebsite) {
-      const withWeb = candidateBusinesses.filter((b) => isValidWebsiteUrl(b.website));
-      if (withWeb.length > 0) {
-        candidateBusinesses = withWeb;
-      }
+    if (strictlyRequiresNoWebsite || activeSearchFilters.requireNoWebsite === true) {
+      candidateBusinesses = candidateBusinesses.filter((b) => {
+        const url = b.website || extractWebsite(b as unknown as Record<string, unknown>);
+        return !isValidWebsiteUrl(url);
+      });
+    } else if (strictlyRequiresWebsite || activeSearchFilters.requireWebsite === true) {
+      candidateBusinesses = candidateBusinesses.filter((b) => {
+        const url = b.website || extractWebsite(b as unknown as Record<string, unknown>);
+        return isValidWebsiteUrl(url);
+      });
     }
 
     if (filterObj) {

@@ -32,6 +32,7 @@ export async function findRealBusinessesWithGemini({
   city,
   country,
   excludeBusinesses,
+  requireNoWebsite,
 }: {
   searchId: string;
   userId: string;
@@ -43,6 +44,7 @@ export async function findRealBusinessesWithGemini({
   city?: string;
   country?: string;
   excludeBusinesses?: string[];
+  requireNoWebsite?: boolean;
 }): Promise<Lead[] | null> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return null;
@@ -62,16 +64,20 @@ export async function findRealBusinessesWithGemini({
         ? `\n8. EXCLUSION REQUIREMENT: Do NOT include any of the following businesses which have already been discovered: ${excludeBusinesses.slice(0, 15).join(", ")}. Find NEW, DIFFERENT businesses.`
         : "";
 
+    const websiteRequirementText = requireNoWebsite
+      ? `\nCRITICAL WEBSITE FILTER REQUIREMENT: The user strictly requires businesses that DO NOT HAVE AN OFFICIAL WEBSITE listed online. You MUST ONLY return real local businesses in ${fullLocationSpec} that LACK an official website or landing page (set "hasWebsite": false and "websiteUrl": null for ALL returned businesses).`
+      : "";
+
     const prompt = `You are an expert local business directory intelligence analyst.
 CRITICAL LOCATION MANDATE: You MUST find businesses STRICTLY located in the user's requested location: "${fullLocationSpec}". DO NOT default to Dubai or any other region unless "${fullLocationSpec}" explicitly specifies Dubai.
 
-Find ${Math.min(count, 12)} REAL, ACTUAL, CURRENTLY REGISTERED AND OPERATING businesses for the category "${businessCategory}" in ${fullLocationSpec}.
+Find ${Math.min(count, 12)} REAL, ACTUAL, CURRENTLY REGISTERED AND OPERATING businesses for the category "${businessCategory}" in ${fullLocationSpec}.${websiteRequirementText}
 
 CRITICAL ACCURACY RULES:
 1. Every business name MUST be a real, authentic commercial establishment currently operating in ${fullLocationSpec}.
 2. The location address must be an authentic local street, district, or neighborhood strictly within ${fullLocationSpec}.
 3. The phone number must use the genuine, valid dialing code for ${fullLocationSpec}.
-4. If they have a real website, provide it. If not, set hasWebsite to false and websiteUrl to null.
+4. ${requireNoWebsite ? 'Set "hasWebsite": false and "websiteUrl": null for ALL returned businesses.' : 'If they have a real website, provide it. If not, set hasWebsite to false and websiteUrl to null.'}
 5. If they have an active verified Instagram handle, provide it without fictional characters. If unknown, set instagramHandle to null.
 6. Provide their realistic Google Maps rating (between 3.9 and 4.9) and review count.
 7. Identify 2 concrete digital weaknesses/opportunities where a freelance ${freelancerType.replace("_", " ")} can help them get more customer bookings.${exclusionsText}
@@ -296,6 +302,7 @@ Respond with JSON format matching:
       businessCategory,
       freelancerType,
       count,
+      requireNoWebsite,
     });
   }
 }
@@ -308,6 +315,7 @@ function generateHeuristicLocalBusinesses({
   businessCategory,
   freelancerType,
   count,
+  requireNoWebsite,
 }: {
   searchId: string;
   targetCity: string;
@@ -316,6 +324,7 @@ function generateHeuristicLocalBusinesses({
   businessCategory: string;
   freelancerType?: FreelancerType;
   count: number;
+  requireNoWebsite?: boolean;
 }): Lead[] {
   const cat = businessCategory || "Restaurant";
   const city = targetCity || "Austin";
@@ -370,6 +379,7 @@ function generateHeuristicLocalBusinesses({
 
     const catLower = (cat + " " + city + " " + targetCountry + " " + targetArea + " " + (freelancerType || "")).toLowerCase();
     const isNoWebsiteMode =
+      Boolean(requireNoWebsite) ||
       catLower.includes("no website") ||
       catLower.includes("without website") ||
       catLower.includes("missing website") ||

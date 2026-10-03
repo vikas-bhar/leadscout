@@ -103,6 +103,7 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
   const [leadsList, setLeadsList] = useState<Lead[]>(initialLeads);
   const [filterTier, setFilterTier] = useState<"all" | "high" | "medium" | "low">("all");
   const [selectedTag, setSelectedTag] = useState<string>("all");
+  const [selectedStatus, setSelectedStatus] = useState<string>("all");
   const [filterGap, setFilterGap] = useState<string>("all");
   const [timeFilter, setTimeFilter] = useState<"all" | "today" | "7d" | "30d" | "90d" | "custom">("all");
   const [customStartDate, setCustomStartDate] = useState<string>("");
@@ -114,6 +115,7 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
     | "time_asc"
     | "location_asc"
     | "industry_asc"
+    | "industry_desc"
     | "rating_asc"
     | "reviews_asc"
     | "name_asc"
@@ -255,7 +257,7 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
         estimatedBudget: (item.estimatedBudget ?? item.estimated_budget ?? null) as string | null,
         folderId: (item.folderId ?? item.folder_id ?? null) as string | null,
         folderName: (item.folderName ?? item.folder_name ?? null) as string | null,
-        status: (item.status ?? "new") as "new" | "viewed" | "contacted" | "won" | "lost",
+        status: (item.status ?? "new") as Lead["status"],
         notes: (item.notes ?? null) as string | null,
         tags,
         contactedAt: (item.contactedAt ?? item.contacted_at ?? null) as string | null,
@@ -455,6 +457,44 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
     toast.success(`Updated tags for ${currentLead.businessName}`);
   }
 
+  // Update lead status with optimistic UI, local storage, and server persistence
+  async function handleUpdateLeadStatus(leadId: string, newStatus: Lead["status"]) {
+    const currentLead = normalizedLeads.find((l) => l.id === leadId);
+    if (!currentLead) return;
+
+    const contactedAt =
+      newStatus === "contacted" || newStatus === "interested" || newStatus === "responded"
+        ? new Date().toISOString()
+        : currentLead.contactedAt;
+
+    setLeadsList((prev) =>
+      prev.map((l) => (l.id === leadId ? { ...l, status: newStatus, contactedAt } : l))
+    );
+
+    updateLocalLead(leadId, { status: newStatus, contactedAt });
+
+    try {
+      await fetch(`/api/leads/${leadId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: newStatus, contacted_at: contactedAt }),
+      });
+    } catch {
+      // Local store updated
+    }
+
+    const statusLabels: Record<string, string> = {
+      new: "New",
+      viewed: "Viewed",
+      contacted: "Contacted",
+      interested: "Interested",
+      responded: "Responded",
+      won: "Closed Won",
+      lost: "Lost",
+    };
+    toast.success(`Updated status for "${currentLead.businessName}" to ${statusLabels[newStatus] || newStatus}`);
+  }
+
   function handleAddCustomTag(leadId: string) {
     if (!customTagInput.trim()) return;
     const formatted = customTagInput.trim();
@@ -484,6 +524,25 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
 
   const lowCount = useMemo(() => {
     return normalizedLeads.filter((l) => getLeadTier(l) === "low").length;
+  }, [normalizedLeads]);
+
+  // Compute status counts for filtering
+  const statusCounts = useMemo(() => {
+    const counts: Record<string, number> = {
+      all: normalizedLeads.length,
+      new: 0,
+      viewed: 0,
+      contacted: 0,
+      interested: 0,
+      responded: 0,
+      won: 0,
+      lost: 0,
+    };
+    normalizedLeads.forEach((l) => {
+      const st = l.status || "new";
+      counts[st] = (counts[st] || 0) + 1;
+    });
+    return counts;
   }, [normalizedLeads]);
 
   // Compute all available tags and counts with lowercase indexing
@@ -673,6 +732,11 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
         );
       })
       .filter((l) => {
+        // 5.5 Lead Status filter
+        if (selectedStatus === "all") return true;
+        return l.status === selectedStatus;
+      })
+      .filter((l) => {
         // 6. Digital Gap filter: broadened multi-signal detection
         if (filterGap === "all") return true;
         const allGapText = (l.gapsFound || [])
@@ -793,6 +857,7 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
         if (sortBy === "score_asc") return a.opportunityScore - b.opportunityScore;
         if (sortBy === "location_asc") return a.location.localeCompare(b.location);
         if (sortBy === "industry_asc") return a.businessCategory.localeCompare(b.businessCategory);
+        if (sortBy === "industry_desc") return b.businessCategory.localeCompare(a.businessCategory);
         if (sortBy === "rating_asc") return a.googleRating - b.googleRating;
         if (sortBy === "reviews_asc") return a.reviewCount - b.reviewCount;
         if (sortBy === "name_asc") return a.businessName.localeCompare(b.businessName);
@@ -816,6 +881,7 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
     selectedLocation,
     selectedIndustry,
     selectedTag,
+    selectedStatus,
     filterGap,
     timeFilter,
     customStartDate,
@@ -837,16 +903,18 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
     if (minScore > 0 || maxScore < 100) count++;
     if (selectedLocation !== "all") count++;
     if (selectedIndustry !== "all") count++;
+    if (selectedStatus !== "all") count++;
     if (timeFilter !== "all") count++;
     if (filterGap !== "all") count++;
     if (filterTier !== "all") count++;
     if (selectedTag !== "all") count++;
     return count;
-  }, [minScore, maxScore, selectedLocation, selectedIndustry, timeFilter, filterGap, filterTier, selectedTag]);
+  }, [minScore, maxScore, selectedLocation, selectedIndustry, selectedStatus, timeFilter, filterGap, filterTier, selectedTag]);
 
   const hasActiveFilters =
     filterTier !== "all" ||
     selectedTag !== "all" ||
+    selectedStatus !== "all" ||
     filterGap !== "all" ||
     timeFilter !== "all" ||
     minScore > 0 ||
@@ -858,6 +926,7 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
   function resetAllFilters() {
     setFilterTier("all");
     setSelectedTag("all");
+    setSelectedStatus("all");
     setFilterGap("all");
     setTimeFilter("all");
     setCustomStartDate("");
@@ -1176,6 +1245,48 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
               )}
             </button>
 
+            {/* Opportunity Score Tier Filter */}
+            <select
+              value={filterTier}
+              onChange={(e) => setFilterTier(e.target.value as "all" | "high" | "medium" | "low")}
+              className="h-9 px-3 rounded-lg border border-neutral-200 bg-white text-xs text-neutral-700 font-medium focus:outline-none focus:ring-2 focus:ring-primary/30 shrink-0"
+            >
+              <option value="all">All Score Tiers</option>
+              <option value="high">🔥 High Score (75+)</option>
+              <option value="medium">📈 Medium Score (60–74)</option>
+              <option value="low">⚡ Low Score (&lt; 60)</option>
+            </select>
+
+            {/* Business Category / Industry Filter */}
+            <select
+              value={selectedIndustry}
+              onChange={(e) => setSelectedIndustry(e.target.value)}
+              className="h-9 px-3 rounded-lg border border-neutral-200 bg-white text-xs text-neutral-700 font-medium focus:outline-none focus:ring-2 focus:ring-primary/30 shrink-0 max-w-[180px] truncate"
+            >
+              <option value="all">All Business Categories ({normalizedLeads.length})</option>
+              {availableIndustries.map((ind) => (
+                <option key={ind.category} value={ind.category}>
+                  🏢 {ind.category} ({ind.count})
+                </option>
+              ))}
+            </select>
+
+            {/* Lead Status Filter */}
+            <select
+              value={selectedStatus}
+              onChange={(e) => setSelectedStatus(e.target.value)}
+              className="h-9 px-3 rounded-lg border border-neutral-200 bg-white text-xs text-neutral-700 font-medium focus:outline-none focus:ring-2 focus:ring-primary/30 shrink-0"
+            >
+              <option value="all">All Lead Statuses ({normalizedLeads.length})</option>
+              <option value="new">🆕 New ({statusCounts.new || 0})</option>
+              <option value="viewed">👁️ Viewed ({statusCounts.viewed || 0})</option>
+              <option value="contacted">📩 Contacted ({statusCounts.contacted || 0})</option>
+              <option value="interested">⭐ Interested ({statusCounts.interested || 0})</option>
+              <option value="responded">💬 Responded ({statusCounts.responded || 0})</option>
+              <option value="won">🏆 Closed Won ({statusCounts.won || 0})</option>
+              <option value="lost">❌ Lost ({statusCounts.lost || 0})</option>
+            </select>
+
             {/* Digital Gap Filter */}
             <select
               value={filterGap}
@@ -1191,17 +1302,17 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
               <option value="low_rating">Suboptimal Rating (&lt; 4.5★)</option>
             </select>
 
-            {/* Time / Search Date Filter */}
+            {/* Date Added / Time Filter */}
             <select
               value={timeFilter}
               onChange={(e) => setTimeFilter(e.target.value as typeof timeFilter)}
               className="h-9 px-3 rounded-lg border border-neutral-200 bg-white text-xs text-neutral-700 font-medium focus:outline-none focus:ring-2 focus:ring-primary/30 shrink-0"
             >
-              <option value="all">🕒 All Time</option>
-              <option value="today">🕒 Last 24 Hours (Today)</option>
-              <option value="7d">🕒 Past 7 Days</option>
-              <option value="30d">🕒 Past 30 Days</option>
-              <option value="90d">🕒 Past 90 Days</option>
+              <option value="all">📅 Date Added: All Time</option>
+              <option value="today">📅 Added Last 24 Hours</option>
+              <option value="7d">📅 Added Past 7 Days</option>
+              <option value="30d">📅 Added Past 30 Days</option>
+              <option value="90d">📅 Added Past 90 Days</option>
               <option value="custom">📅 Custom Date Range...</option>
             </select>
 
@@ -1209,17 +1320,18 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
-              className="h-9 px-3 rounded-lg border border-neutral-200 bg-white text-xs text-neutral-700 font-medium focus:outline-none focus:ring-2 focus:ring-primary/30 shrink-0"
+              className="h-9 px-3 rounded-lg border border-neutral-200 bg-white text-xs text-neutral-700 font-medium focus:outline-none focus:ring-2 focus:ring-primary/30 shrink-0 font-semibold"
             >
-              <option value="score_desc">Score: High to Low</option>
-              <option value="score_asc">Score: Low to High</option>
-              <option value="time_desc">Search Time: Newest First</option>
-              <option value="time_asc">Search Time: Oldest First</option>
-              <option value="location_asc">Location: A to Z</option>
-              <option value="industry_asc">Industry: A to Z</option>
-              <option value="rating_asc">Rating: Lowest First</option>
-              <option value="reviews_asc">Reviews: Fewest First</option>
-              <option value="name_asc">Name: A to Z</option>
+              <option value="score_desc">🔥 Opportunity Score: High to Low</option>
+              <option value="score_asc">📉 Opportunity Score: Low to High</option>
+              <option value="industry_asc">🏢 Business Category: A to Z</option>
+              <option value="industry_desc">🏢 Business Category: Z to A</option>
+              <option value="time_desc">🕒 Date Added: Newest First</option>
+              <option value="time_asc">🕒 Date Added: Oldest First</option>
+              <option value="location_asc">📍 Territory / Location: A to Z</option>
+              <option value="rating_asc">⭐ Rating: Lowest First</option>
+              <option value="reviews_asc">💬 Reviews: Fewest First</option>
+              <option value="name_asc">🔤 Business Name: A to Z</option>
             </select>
           </div>
 
@@ -1307,6 +1419,7 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
                         setMaxScore(100);
                         setSelectedLocation("all");
                         setSelectedIndustry("all");
+                        setSelectedStatus("all");
                       }}
                       className="text-primary hover:underline font-medium text-[11px]"
                     >
@@ -1317,8 +1430,8 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
               </div>
             </div>
 
-            {/* 4 Advanced Filter Controls Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* 5 Advanced Filter Controls Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
               {/* Filter 1: Opportunity Score */}
               <div className="p-3.5 rounded-lg border border-neutral-200 bg-white space-y-3 shadow-xs">
                 <div className="flex items-center justify-between">
@@ -1670,12 +1783,69 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
                   </div>
                 </div>
               </div>
+
+              {/* Filter 5: Lead Status */}
+              <div className="p-3.5 rounded-lg border border-neutral-200 bg-white space-y-3 shadow-xs">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-xs font-semibold text-neutral-800">
+                    <CheckSquare className="h-4 w-4 text-indigo-600" />
+                    <span>Lead Status</span>
+                  </div>
+                  <span className="text-[11px] text-neutral-400 font-medium capitalize">
+                    {selectedStatus === "all" ? "All Statuses" : selectedStatus}
+                  </span>
+                </div>
+
+                <div className="flex flex-wrap gap-1">
+                  {[
+                    { id: "all", label: "All" },
+                    { id: "new", label: "New" },
+                    { id: "contacted", label: "Contacted" },
+                    { id: "interested", label: "Interested" },
+                    { id: "responded", label: "Responded" },
+                    { id: "won", label: "Won" },
+                    { id: "lost", label: "Lost" },
+                  ].map((st) => {
+                    const isSelected = selectedStatus === st.id;
+                    const count = st.id === "all" ? statusCounts.all : statusCounts[st.id] || 0;
+                    return (
+                      <button
+                        key={st.id}
+                        type="button"
+                        onClick={() => setSelectedStatus(isSelected ? "all" : st.id)}
+                        className={cn(
+                          "px-2 py-0.5 rounded text-[11px] font-medium transition-colors border",
+                          isSelected
+                            ? "bg-indigo-600 text-white border-indigo-600 font-semibold shadow-xs"
+                            : "bg-neutral-50 text-neutral-600 hover:bg-neutral-100 border-neutral-200"
+                        )}
+                      >
+                        {st.label} ({count})
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           </div>
         )}
 
         {/* Active Filters Badges Strip */}
         <div className="flex flex-wrap items-center gap-1.5 text-xs text-neutral-600 pt-1">
+          {selectedStatus !== "all" && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-indigo-50 text-indigo-800 text-[11px] font-semibold border border-indigo-200 animate-in fade-in-50">
+              <CheckSquare className="h-3 w-3 text-indigo-600" />
+              Status: {selectedStatus.charAt(0).toUpperCase() + selectedStatus.slice(1)}
+              <button
+                type="button"
+                onClick={() => setSelectedStatus("all")}
+                className="hover:text-indigo-950 ml-0.5"
+                title="Clear status filter"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          )}
           {minScore > 0 && (
             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-rose-50 text-rose-800 text-[11px] font-semibold border border-rose-200 animate-in fade-in-50">
               <TrendingUp className="h-3 w-3 text-rose-600" />
@@ -1928,11 +2098,38 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
                           </span>
                         );
                       })()}
-                      {lead.status === "contacted" && (
-                        <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-blue-50 text-blue-700 border border-blue-200">
-                          Contacted
-                        </span>
-                      )}
+                      {/* Lead Status Selector Badge */}
+                      <select
+                        value={lead.status || "new"}
+                        onChange={(e) =>
+                          handleUpdateLeadStatus(lead.id, e.target.value as Lead["status"])
+                        }
+                        className={cn(
+                          "px-2 py-0.5 rounded text-[11px] font-semibold border focus:outline-none focus:ring-1 focus:ring-primary shrink-0 cursor-pointer transition-colors",
+                          lead.status === "contacted"
+                            ? "bg-amber-50 text-amber-800 border-amber-200"
+                            : lead.status === "interested"
+                            ? "bg-emerald-50 text-emerald-800 border-emerald-200 font-bold"
+                            : lead.status === "responded"
+                            ? "bg-teal-50 text-teal-800 border-teal-200"
+                            : lead.status === "won"
+                            ? "bg-emerald-100 text-emerald-900 border-emerald-300 font-bold"
+                            : lead.status === "lost"
+                            ? "bg-neutral-100 text-neutral-600 border-neutral-200"
+                            : lead.status === "viewed"
+                            ? "bg-purple-50 text-purple-800 border-purple-200"
+                            : "bg-blue-50 text-blue-800 border-blue-200"
+                        )}
+                        title="Click to update lead status"
+                      >
+                        <option value="new">🆕 New</option>
+                        <option value="viewed">👁️ Viewed</option>
+                        <option value="contacted">📩 Contacted</option>
+                        <option value="interested">⭐ Interested</option>
+                        <option value="responded">💬 Responded</option>
+                        <option value="won">🏆 Closed Won</option>
+                        <option value="lost">❌ Lost</option>
+                      </select>
                     </div>
 
                     {/* Tag Management Row */}

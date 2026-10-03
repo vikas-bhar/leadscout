@@ -44,6 +44,22 @@ export function applyFilters(
   console.log("  minReviews:", f.minReviews);
   console.log("  priceLevel:", f.priceLevel);
 
+  if (businesses.length > 0) {
+    console.log("WEBSITE DEBUG:", businesses.slice(0, 3).map((b) => ({
+      name: b.title || b.name,
+      extractedWebsite: extractWebsite(b),
+      website: b.website,
+      websiteUri: b.websiteUri,
+      url: b.url,
+      siteUrl: b.siteUrl,
+      allKeys: Object.keys(b).filter((k) =>
+        k.toLowerCase().includes("web") ||
+        k.toLowerCase().includes("url") ||
+        k.toLowerCase().includes("site")
+      ),
+    })));
+  }
+
   const passed: any[] = [];
   const rejected: Array<{ business: any; reason: string }> = [];
   const reasons: Record<string, number> = {};

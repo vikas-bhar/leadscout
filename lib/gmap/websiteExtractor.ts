@@ -11,11 +11,18 @@ export function extractWebsite(raw: Record<string, unknown> | null | undefined):
     raw.homePage,
     raw.homepage,
     raw.siteUrl,
+    raw.site_url,
     raw.web,
     raw.webPage,
     raw.webpage,
+    raw.webUrl,
+    raw.web_url,
     raw.contactWebsite,
     raw.businessWebsite,
+    raw.domain,
+    raw.externalUrl,
+    raw.external_url,
+    raw.link,
   ];
 
   for (const candidate of candidates) {

@@ -35,7 +35,11 @@ export async function POST(request: NextRequest) {
     if (!auth.user) return auth.response;
 
     const body = await request.json();
-    console.log("SEARCH START - filters received:", JSON.stringify(body.filters || body.searchFilters || {}));
+    console.log("FILTER DEBUG:", JSON.stringify({
+      requireNoWebsite: body.filters?.requireNoWebsite ?? body.searchFilters?.requireNoWebsite,
+      filtersReceived: body.filters || body.searchFilters,
+      customFilter: body.customFilter,
+    }));
     const parsed = searchRequestSchema.parse(body);
 
     let targetResults = parsed.resultCount;

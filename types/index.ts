@@ -12,7 +12,7 @@ export type FreelancerType =
 
 export type UrgencyLevel = "low" | "medium" | "high" | "critical";
 export type SearchStatus = "pending" | "running" | "completed" | "failed";
-export type LeadStatus = "new" | "viewed" | "contacted" | "won" | "lost";
+export type LeadStatus = "new" | "viewed" | "contacted" | "interested" | "responded" | "won" | "lost";
 export type CreditType = "purchase" | "usage" | "refund" | "bonus" | "subscription";
 export type PitchStyle = "instagram_dm" | "email" | "whatsapp" | "phone_script";
 export type PitchSendTime = "morning" | "afternoon" | "evening";

@@ -2,6 +2,7 @@ import { ApifyClient } from "apify-client";
 import { PIPELINE_CONFIG } from "../config";
 import { findRealBusinessesWithGemini } from "@/lib/gemini-leads";
 import { processMapsData } from "../dataQuality";
+import { normalizeBusinessName, normalizePhoneNumber, normalizeLocation } from "@/lib/deduplication";
 
 const apifyToken =
   process.env.APIFY_API_TOKEN ||
@@ -186,14 +187,31 @@ export async function scrapeGoogleMaps(
 ): Promise<MapsResult[]> {
   onProgress?.(`Searching local listings for: ${searchQuery}`);
 
-  const excludedNamesSet = new Set((excludeNames || []).map((n) => n.trim().toLowerCase()));
+  const excludedNamesSet = new Set(
+    (excludeNames || []).map((n) => normalizeBusinessName(n)).filter(Boolean)
+  );
   const excludedIdsSet = new Set(excludePlaceIds || []);
 
   const filterOutDuplicates = (list: MapsResult[]): MapsResult[] => {
+    const seenNames = new Set<string>();
+    const seenPhones = new Set<string>();
+
     return list.filter((item) => {
-      if (excludedIdsSet.has(item.placeId)) return false;
-      const cleanName = (item.name || "").trim().toLowerCase();
-      if (excludedNamesSet.has(cleanName)) return false;
+      if (item.placeId && excludedIdsSet.has(item.placeId)) return false;
+
+      const normName = normalizeBusinessName(item.name);
+      if (normName && excludedNamesSet.has(normName)) return false;
+
+      const normPhone = normalizePhoneNumber(item.phone);
+
+      // Deduplicate against other items in the same batch
+      const nameLocKey = `${normName}_${normalizeLocation(item.address).slice(0, 15)}`;
+      if (normName && seenNames.has(nameLocKey)) return false;
+      if (normPhone && seenPhones.has(normPhone)) return false;
+
+      if (normName) seenNames.add(nameLocKey);
+      if (normPhone) seenPhones.add(normPhone);
+
       return true;
     });
   };

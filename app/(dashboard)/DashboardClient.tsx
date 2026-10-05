@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Search, Users, History, Coins } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { LowCreditWarning } from "@/components/credits/LowCreditWarning";
+import { LeadsChart } from "@/components/dashboard/LeadsChart";
 import { estimateSearchesRemaining } from "@/lib/credit-calc";
 import { getLocalBalance, getLocalLeads, getLocalSearches } from "@/lib/local-store";
 
@@ -82,6 +83,9 @@ export function DashboardClient({
           <p className="mt-2 text-2xl font-medium">{searchCount}</p>
         </Card>
       </div>
+
+      {/* Recharts Leads Summary Chart */}
+      <LeadsChart />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Link href="/search" className="ff-card flex items-center gap-3 hover:bg-gray-50">

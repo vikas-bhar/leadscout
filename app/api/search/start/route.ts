@@ -4,6 +4,7 @@ import { requireApiUser } from "@/lib/supabase";
 import { getCreditBalance } from "@/lib/credits";
 import { runPipeline, calculateCredits } from "@/lib/pipeline/masterPipeline";
 import { normalizeWebsiteUrl, isValidWebsiteUrl } from "@/lib/pipeline/cleaner";
+import { generateDeterministicLeadId, deduplicateLeads } from "@/lib/deduplication";
 import type { Lead, CustomClientFilter, AgentAnalysis, PitchSet } from "@/types";
 import type { AIAnalysis } from "@/lib/pipeline/stages/stage5_ai";
 
@@ -205,8 +206,15 @@ export async function POST(request: NextRequest) {
         pitchTips: pitchSet.pitchTips || ["Be brief", "Lead with outcome"],
       };
 
+      const leadId = generateDeterministicLeadId({
+        businessName: lead.business.name,
+        phone: lead.business.phone,
+        location: lead.business.address,
+        websiteUrl: validWeb,
+      });
+
       return {
-        id: `lead_${lead.rank}_${Date.now()}`,
+        id: leadId,
         searchId,
         userId: auth.user.id,
         rank: lead.rank,
@@ -256,9 +264,11 @@ export async function POST(request: NextRequest) {
       Boolean(parsed.customFilterConfig?.mapsFilters?.requireNoWebsite) ||
       Boolean(customFilter?.digitalGapPriorities?.some((p: string) => p.toLowerCase().includes("no website")));
 
-    const finalLeads = isNoWebFilterOn
+    const filtered = isNoWebFilterOn
       ? formattedLeads.filter((l) => !isValidWebsiteUrl(l.websiteUrl) && !l.hasWebsite)
       : formattedLeads;
+
+    const finalLeads = deduplicateLeads(filtered);
 
     return NextResponse.json({
       success: true,

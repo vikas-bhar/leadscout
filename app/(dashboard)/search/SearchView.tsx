@@ -25,7 +25,14 @@ import {
   type CustomClientFilter,
 } from "@/types";
 import { calculateSearchCost } from "@/lib/credit-calc";
-import { saveLocalLeads, saveLocalSearch, deductLocalCredits, getLocalBalance, safeJsonStringify } from "@/lib/local-store";
+import {
+  saveLocalLeads,
+  saveLocalSearch,
+  deductLocalCredits,
+  getLocalBalance,
+  safeJsonStringify,
+  getDiscoveredBusinessFingerprints,
+} from "@/lib/local-store";
 import {
   LocationFilter,
   buildSearchLocationString,
@@ -302,6 +309,8 @@ export function SearchView({
         instagram: activeFilterConfig?.instagramFilters || null,
       };
 
+      const { names: existingNames, placeIds: existingPlaceIds } = getDiscoveredBusinessFingerprints();
+
       const response = await fetch("/api/search/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -314,6 +323,8 @@ export function SearchView({
           countryCode: searchCountryCode,
           city: searchCity,
           place: searchPlace,
+          excludeNames: existingNames,
+          excludePlaceIds: existingPlaceIds,
           filters: searchFiltersObj,
           customFilter: customFilter || undefined,
           customPromptConfig: activePromptConfig || undefined,

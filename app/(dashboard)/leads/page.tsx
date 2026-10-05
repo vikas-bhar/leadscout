@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { getAuthenticatedUser, createSupabaseServerClient } from "@/lib/supabase";
+import { deduplicateLeads } from "@/lib/deduplication";
 import { LeadsView } from "./LeadsView";
 
 export const dynamic = "force-dynamic";
@@ -19,5 +20,6 @@ export default async function LeadsPage() {
     console.log("Error loading leads in LeadsPage:", error);
   }
 
-  return <LeadsView initialLeads={leads || []} />;
+  const cleanLeads = deduplicateLeads(leads || []);
+  return <LeadsView initialLeads={cleanLeads} />;
 }

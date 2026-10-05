@@ -1,6 +1,12 @@
 import type { CreditBalance, CreditTransaction, Lead, LeadFolder } from "@/types";
 import type { CustomPromptConfig, CustomFilterConfig } from "@/lib/customization/promptBuilder";
 import { DEFAULT_PROMPT_TEMPLATES, DEFAULT_FILTER_TEMPLATES } from "@/lib/customization/defaultTemplates";
+import {
+  deduplicateLeads,
+  generateDeterministicLeadId,
+  normalizeBusinessName,
+  normalizePhoneNumber,
+} from "@/lib/deduplication";
 
 export interface StoredSearch {
   id: string;
@@ -407,37 +413,57 @@ export function deleteLocalLeadsBulk(ids: string[]): void {
   saveStore(store);
 }
 
-export function getDiscoveredBusinessFingerprints(): { names: string[]; phoneNumbers: string[] } {
+export function getDiscoveredBusinessFingerprints(): {
+  names: string[];
+  phoneNumbers: string[];
+  placeIds: string[];
+} {
   const store = getStore();
   const names = store.leads
-    .map((l) => (l.businessName || "").trim().toLowerCase())
+    .map((l) => normalizeBusinessName(l.businessName))
     .filter(Boolean);
   const phoneNumbers = store.leads
-    .map((l) => (l.phone || "").replace(/[^0-9]/g, ""))
-    .filter((p) => p.length > 5);
+    .map((l) => normalizePhoneNumber(l.phone))
+    .filter((p) => p.length >= 7);
+  const placeIds = store.leads
+    .map((l) => {
+      const raw = l as unknown as { placeId?: string; place_id?: string };
+      return raw.placeId || raw.place_id || "";
+    })
+    .filter((p) => p && !p.startsWith("gen_") && !p.startsWith("gm_auto_"));
 
-  return { names, phoneNumbers };
+  return {
+    names: Array.from(new Set(names)),
+    phoneNumbers: Array.from(new Set(phoneNumbers)),
+    placeIds: Array.from(new Set(placeIds)),
+  };
 }
 
 export function getLocalLeads(): Lead[] {
   const store = getStore();
   let modified = false;
 
-  // Sanitize any corrupt/undefined IDs in memory/localStorage
-  const sanitized = store.leads.map((lead, idx) => {
+  // 1. Sanitize IDs to deterministic or valid IDs
+  const sanitized = store.leads.map((lead) => {
     if (!lead.id || lead.id === "undefined" || lead.id === "null") {
       modified = true;
-      const cleanName = (lead.businessName || "prospect").toLowerCase().replace(/[^a-z0-9]/g, "");
       return {
         ...lead,
-        id: `lead_${cleanName}_${idx + 1}_${Math.random().toString(36).slice(2, 6)}`,
+        id: generateDeterministicLeadId({
+          businessName: lead.businessName,
+          phone: lead.phone,
+          location: lead.location,
+          websiteUrl: lead.websiteUrl,
+        }),
       };
     }
     return lead;
   });
 
-  if (modified) {
-    store.leads = sanitized;
+  // 2. Automatically deduplicate stored leads so old duplicate entries are cleaned up
+  const deduped = deduplicateLeads(sanitized);
+  if (deduped.length !== store.leads.length || modified) {
+    store.leads = deduped;
     saveStore(store);
   }
 
@@ -447,13 +473,19 @@ export function getLocalLeads(): Lead[] {
 export function saveLocalLeads(newLeads: Lead[]) {
   const store = getStore();
 
-  const sanitizedNew = newLeads.map((lead, idx) => {
+  const sanitizedNew = newLeads.map((lead) => {
     const raw = lead as unknown as Record<string, unknown>;
     const leadId = (raw.id || raw._id) as string;
     const finalId =
-      leadId && leadId !== "undefined" && leadId !== "null"
+      leadId && leadId !== "undefined" && leadId !== "null" && !leadId.startsWith("lead_rank_")
         ? leadId
-        : `lead_${Date.now()}_${idx + 1}_${Math.random().toString(36).slice(2, 6)}`;
+        : generateDeterministicLeadId({
+            id: leadId,
+            businessName: lead.businessName,
+            phone: lead.phone,
+            location: lead.location,
+            websiteUrl: lead.websiteUrl,
+          });
 
     return {
       ...lead,
@@ -462,10 +494,26 @@ export function saveLocalLeads(newLeads: Lead[]) {
     } as Lead;
   });
 
-  // Filter out any duplicates by ID and prepend new leads
-  const newIds = new Set(sanitizedNew.map((l) => l.id));
-  store.leads = [...sanitizedNew, ...store.leads.filter((l) => l.id && !newIds.has(l.id))];
+  // Deduplicate new leads combined with existing stored leads using multi-key matching
+  // New leads come first so fresh data is prioritized while preserving user edits
+  store.leads = deduplicateLeads([...sanitizedNew, ...store.leads]);
   saveStore(store);
+}
+
+/**
+ * Manually scrub duplicate leads from local storage and return the number of duplicates removed
+ */
+export function scrubDuplicateLeads(): { initialCount: number; cleanCount: number; duplicatesRemoved: number } {
+  const store = getStore();
+  const initialCount = store.leads.length;
+  const deduped = deduplicateLeads(store.leads);
+  store.leads = deduped;
+  saveStore(store);
+  return {
+    initialCount,
+    cleanCount: deduped.length,
+    duplicatesRemoved: Math.max(0, initialCount - deduped.length),
+  };
 }
 
 export function updateLocalLead(id: string, updates: Partial<Lead>): Lead | null {

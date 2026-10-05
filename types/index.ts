@@ -496,6 +496,9 @@ export interface Lead {
   phone: string | null;
   photoCount: number;
   mapsUrl: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  coordinates?: { lat: number; lng: number } | null;
   instagramHandle: string | null;
   instagramFollowers: number | null;
   instagramFollowing: number | null;

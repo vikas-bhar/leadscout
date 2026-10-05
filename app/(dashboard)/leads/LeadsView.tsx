@@ -22,7 +22,6 @@ import {
   X,
   SlidersHorizontal,
   ChevronDown,
-  ChevronUp,
   RotateCcw,
   Filter,
   Mail,
@@ -32,6 +31,10 @@ import {
   Trash2,
   CheckSquare,
   Square,
+  ShieldCheck,
+  Map as MapIcon,
+  List,
+  Columns,
 } from "lucide-react";
 import {
   type Gap,
@@ -57,10 +60,14 @@ import {
   deleteLocalLead,
   deleteLocalLeadsBulk,
   saveLocalLeads,
+  scrubDuplicateLeads,
 } from "@/lib/local-store";
+import { deduplicateLeads } from "@/lib/deduplication";
 import { toast } from "sonner";
 import { OutreachTemplateModal } from "@/components/leads/OutreachTemplateModal";
 import { LeadFolderBar } from "@/components/leads/LeadFolderBar";
+import { LeadsFilterSidebar } from "@/components/leads/LeadsFilterSidebar";
+import { LeadsMapView } from "@/components/leads/LeadsMapView";
 
 interface LeadsViewProps {
   initialLeads: Lead[];
@@ -139,33 +146,21 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
   const [maxScore, setMaxScore] = useState<number>(100);
   const [selectedLocation, setSelectedLocation] = useState<string>("all");
   const [selectedIndustry, setSelectedIndustry] = useState<string>("all");
-  const [showAdvancedFilters, setShowAdvancedFilters] = useState<boolean>(true);
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState<boolean>(false);
+  const [isSidebarVisible, setIsSidebarVisible] = useState<boolean>(true);
+  const [isMobileFilterOpen, setIsMobileFilterOpen] = useState<boolean>(false);
+  const [viewMode, setViewMode] = useState<"list" | "map" | "split">("list");
+  const [focusedLeadOnMap, setFocusedLeadOnMap] = useState<Lead | null>(null);
 
   useEffect(() => {
     const local = getLocalLeads();
-    const combinedMap = new Map<string, Lead>();
+    const all = [...(local || []), ...(initialLeads || [])];
+    const deduped = deduplicateLeads(all);
 
-    // 1. Add local leads first (they contain latest searches saved in the browser)
-    if (Array.isArray(local)) {
-      local.forEach((l) => {
-        if (l && l.id) combinedMap.set(l.id, l);
-      });
-    }
-
-    // 2. Add initialLeads (server records)
-    if (Array.isArray(initialLeads)) {
-      initialLeads.forEach((l) => {
-        if (l && l.id && !combinedMap.has(l.id)) {
-          combinedMap.set(l.id, l);
-        }
-      });
-    }
-
-    const combined = Array.from(combinedMap.values());
-    if (combined.length > 0) {
-      setLeadsList(combined);
+    if (deduped.length > 0) {
+      setLeadsList(deduped);
     } else if (initialLeads.length > 0) {
-      setLeadsList(initialLeads);
+      setLeadsList(deduplicateLeads(initialLeads));
     }
   }, [initialLeads]);
 
@@ -186,7 +181,7 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
 
   // Normalize leads (handling potential snake_case from DB)
   const normalizedLeads: Lead[] = useMemo(() => {
-    return leadsList.map((itemRaw, index) => {
+    const mapped = leadsList.map((itemRaw, index) => {
       const item = itemRaw as unknown as Record<string, unknown>;
       const oppScore = Number(item.opportunityScore ?? item.opportunity_score ?? 70);
 
@@ -235,6 +230,9 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
         phone: (item.phone ?? null) as string | null,
         photoCount: Number(item.photoCount ?? item.photo_count ?? 0),
         mapsUrl: validMapsUrl,
+        latitude: typeof item.latitude === "number" ? item.latitude : undefined,
+        longitude: typeof item.longitude === "number" ? item.longitude : undefined,
+        coordinates: (item.coordinates as { lat: number; lng: number } | undefined) ?? undefined,
         instagramHandle: (item.instagramHandle ?? item.instagram_handle ?? null) as string | null,
         instagramFollowers: (item.instagramFollowers ?? item.instagram_followers ?? null) as number | null,
         instagramFollowing: (item.instagramFollowing ?? item.instagram_following ?? null) as number | null,
@@ -264,6 +262,8 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
         createdAt: (item.createdAt ?? item.created_at ?? new Date().toISOString()) as string,
       } as Lead;
     });
+
+    return deduplicateLeads(mapped);
   }, [leadsList]);
 
   // Click outside to close folder dropdown
@@ -493,6 +493,21 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
       lost: "Lost",
     };
     toast.success(`Updated status for "${currentLead.businessName}" to ${statusLabels[newStatus] || newStatus}`);
+  }
+
+  function handleCleanDuplicates() {
+    const result = scrubDuplicateLeads();
+    const updated = getLocalLeads();
+    setLeadsList(deduplicateLeads(updated));
+    if (result.duplicatesRemoved > 0) {
+      toast.success(
+        `Deduplication active: removed ${result.duplicatesRemoved} duplicate lead${result.duplicatesRemoved === 1 ? "" : "s"}. Clean total: ${result.cleanCount} unique businesses.`
+      );
+    } else {
+      toast.success(
+        `All clear: all ${result.cleanCount} discovered leads are 100% unique!`
+      );
+    }
   }
 
   function handleAddCustomTag(leadId: string) {
@@ -732,8 +747,11 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
         );
       })
       .filter((l) => {
-        // 5.5 Lead Status filter
+        // 5.5 Lead Status filter (handles new, contacted, interested/qualified, responded, won, lost)
         if (selectedStatus === "all") return true;
+        if (selectedStatus === "interested" || selectedStatus === "qualified") {
+          return l.status === "interested" || (l.tags || []).some((t) => t.toLowerCase().includes("qualif"));
+        }
         return l.status === selectedStatus;
       })
       .filter((l) => {
@@ -996,7 +1014,7 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
   }
 
   return (
-    <div className="space-y-6 max-w-6xl mx-auto pb-12">
+    <div className="space-y-6 max-w-7xl mx-auto px-4 sm:px-6 pb-12">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -1005,12 +1023,75 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
             Organize leads by territory location or custom folders, categorize with tags, and prioritize high-converting outreach.
           </p>
         </div>
-        <Link href="/search">
-          <Button size="sm" className="gap-2">
-            <Search className="h-4 w-4" />
-            New Search
+        <div className="flex items-center gap-2.5">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              if (typeof window !== "undefined" && window.innerWidth < 1024) {
+                setIsMobileFilterOpen(true);
+              } else {
+                setIsSidebarVisible(!isSidebarVisible);
+              }
+            }}
+            className={cn(
+              "gap-1.5 text-xs font-semibold border-neutral-300",
+              activeAdvancedFilterCount > 0
+                ? "text-primary border-primary/40 bg-primary/5"
+                : "text-neutral-700 hover:text-neutral-900"
+            )}
+            title="Toggle Filter Sidebar"
+          >
+            <SlidersHorizontal className="h-3.5 w-3.5 text-primary" />
+            <span>{isSidebarVisible ? "Hide Filters" : "Filter Sidebar"}</span>
+            {activeAdvancedFilterCount > 0 && (
+              <span className="px-1.5 py-0.2 rounded-full bg-primary text-white text-[10px] font-bold">
+                {activeAdvancedFilterCount}
+              </span>
+            )}
           </Button>
-        </Link>
+
+          <Button
+            variant={viewMode === "map" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setViewMode(viewMode === "map" ? "list" : "map")}
+            className={cn(
+              "gap-1.5 text-xs font-semibold",
+              viewMode === "map"
+                ? "bg-rose-600 hover:bg-rose-700 text-white border-rose-600 shadow-xs"
+                : "border-neutral-300 text-neutral-700 hover:text-neutral-900"
+            )}
+            title="Toggle Google Maps Visualization"
+          >
+            <MapIcon className="h-3.5 w-3.5 text-rose-500" />
+            <span>{viewMode === "map" ? "List View" : "Map View"}</span>
+            <span
+              className={cn(
+                "px-1.5 py-0.2 rounded-full text-[10px] font-bold",
+                viewMode === "map" ? "bg-white/20 text-white" : "bg-neutral-100 text-neutral-600"
+              )}
+            >
+              {filteredLeads.length}
+            </span>
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleCleanDuplicates}
+            className="gap-1.5 text-xs text-neutral-600 hover:text-neutral-900 border-neutral-300"
+            title="Scan and eliminate any duplicate business leads"
+          >
+            <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
+            <span>Deduplicate Leads</span>
+          </Button>
+          <Link href="/search">
+            <Button size="sm" className="gap-2">
+              <Search className="h-4 w-4" />
+              New Search
+            </Button>
+          </Link>
+        </div>
       </div>
 
       {/* Lead Organization & Folders Bar */}
@@ -1024,8 +1105,43 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
         onDeleteFolder={handleDeleteFolder}
       />
 
-      {/* Summary Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+      {/* Main Content Layout with Sidebar and Leads */}
+      <div className="flex flex-col lg:flex-row gap-6 items-start">
+        {/* Filtering Sidebar */}
+        {(isSidebarVisible || isMobileFilterOpen) && (
+          <LeadsFilterSidebar
+            minScore={minScore}
+            setMinScore={setMinScore}
+            maxScore={maxScore}
+            setMaxScore={setMaxScore}
+            selectedIndustry={selectedIndustry}
+            setSelectedIndustry={setSelectedIndustry}
+            selectedStatus={selectedStatus}
+            setSelectedStatus={setSelectedStatus}
+            selectedLocation={selectedLocation}
+            setSelectedLocation={setSelectedLocation}
+            filterGap={filterGap}
+            setFilterGap={setFilterGap}
+            filterTier={filterTier}
+            setFilterTier={setFilterTier}
+            timeFilter={timeFilter}
+            setTimeFilter={setTimeFilter}
+            availableIndustries={availableIndustries}
+            availableLocations={availableLocations}
+            statusCounts={statusCounts}
+            totalLeadsCount={normalizedLeads.length}
+            filteredCount={filteredLeads.length}
+            activeFilterCount={activeAdvancedFilterCount}
+            onResetAll={resetAllFilters}
+            isOpenMobile={isMobileFilterOpen}
+            onCloseMobile={() => setIsMobileFilterOpen(false)}
+          />
+        )}
+
+        {/* Right Column: Leads Workspace */}
+        <div className="flex-1 min-w-0 w-full space-y-6">
+          {/* Summary Stats Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
         <div
           onClick={() => handleTierClick("all")}
           className={cn(
@@ -1213,36 +1329,54 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
               )}
             </div>
 
-            {/* Advanced Filters Toggle Button */}
+            {/* Filter Sidebar Toggle Button */}
             <button
               type="button"
-              onClick={() => setShowAdvancedFilters((prev) => !prev)}
+              onClick={() => {
+                if (typeof window !== "undefined" && window.innerWidth < 1024) {
+                  setIsMobileFilterOpen(true);
+                } else {
+                  setIsSidebarVisible((prev) => !prev);
+                }
+              }}
               className={cn(
                 "h-9 px-3 rounded-lg border text-xs font-semibold inline-flex items-center gap-2 transition-all select-none shrink-0",
-                showAdvancedFilters
+                isSidebarVisible
                   ? "bg-neutral-900 text-white border-neutral-900 shadow-sm"
                   : activeAdvancedFilterCount > 0
                   ? "bg-primary/10 text-primary border-primary/30 hover:bg-primary/15"
                   : "bg-white text-neutral-700 border-neutral-200 hover:bg-neutral-50"
               )}
+              title="Toggle Filter Sidebar"
             >
               <SlidersHorizontal className="h-3.5 w-3.5" />
-              <span>Filters</span>
+              <span>Sidebar</span>
               {activeAdvancedFilterCount > 0 && (
                 <span
                   className={cn(
                     "px-1.5 py-0.2 rounded-full text-[10px] font-bold",
-                    showAdvancedFilters ? "bg-white text-neutral-900" : "bg-primary text-white"
+                    isSidebarVisible ? "bg-white text-neutral-900" : "bg-primary text-white"
                   )}
                 >
                   {activeAdvancedFilterCount}
                 </span>
               )}
-              {showAdvancedFilters ? (
-                <ChevronUp className="h-3.5 w-3.5 opacity-70" />
-              ) : (
-                <ChevronDown className="h-3.5 w-3.5 opacity-70" />
+            </button>
+
+            {/* Optional Horizontal Grid Toggle */}
+            <button
+              type="button"
+              onClick={() => setShowAdvancedFilters((prev) => !prev)}
+              className={cn(
+                "h-9 px-2.5 rounded-lg border text-xs font-semibold inline-flex items-center gap-1.5 transition-all select-none shrink-0",
+                showAdvancedFilters
+                  ? "bg-neutral-800 text-white border-neutral-800 shadow-sm"
+                  : "bg-white text-neutral-600 border-neutral-200 hover:bg-neutral-50"
               )}
+              title="Toggle horizontal filters grid"
+            >
+              <Filter className="h-3.5 w-3.5" />
+              <span>Grid</span>
             </button>
 
             {/* Opportunity Score Tier Filter */}
@@ -1375,6 +1509,62 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
             <span className="text-xs text-neutral-500">
               Showing <strong>{filteredLeads.length}</strong> of {normalizedLeads.length} leads
             </span>
+
+            {/* Segmented View Mode Switcher: List | Map | Split */}
+            <div className="inline-flex items-center rounded-lg border border-neutral-200 bg-neutral-100 p-0.5 text-neutral-600 shrink-0">
+              <button
+                type="button"
+                onClick={() => setViewMode("list")}
+                className={cn(
+                  "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold transition-all",
+                  viewMode === "list"
+                    ? "bg-white text-neutral-900 shadow-xs"
+                    : "text-neutral-600 hover:text-neutral-900"
+                )}
+                title="Table / Card List View"
+              >
+                <List className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">List</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode("map")}
+                className={cn(
+                  "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold transition-all",
+                  viewMode === "map"
+                    ? "bg-white text-rose-600 shadow-xs"
+                    : "text-neutral-600 hover:text-neutral-900"
+                )}
+                title="Google Maps Location View"
+              >
+                <MapIcon className="h-3.5 w-3.5 text-rose-500" />
+                <span>Map</span>
+                <span
+                  className={cn(
+                    "px-1.5 py-0.2 rounded-full text-[10px] font-bold",
+                    viewMode === "map"
+                      ? "bg-rose-100 text-rose-700"
+                      : "bg-neutral-200 text-neutral-600"
+                  )}
+                >
+                  {filteredLeads.length}
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode("split")}
+                className={cn(
+                  "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold transition-all hidden lg:inline-flex",
+                  viewMode === "split"
+                    ? "bg-white text-neutral-900 shadow-xs"
+                    : "text-neutral-600 hover:text-neutral-900"
+                )}
+                title="Side-by-side List & Map View"
+              >
+                <Columns className="h-3.5 w-3.5 text-blue-600" />
+                <span>Split</span>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -2013,9 +2203,29 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
             </Button>
           </div>
         </div>
+      ) : viewMode === "map" ? (
+        <LeadsMapView
+          leads={filteredLeads}
+          selectedLeadId={focusedLeadOnMap?.id}
+          onSelectLead={setFocusedLeadOnMap}
+          onUpdateStatus={handleUpdateLeadStatus}
+        />
       ) : (
-        <div className="space-y-3">
-          {filteredLeads.map((lead) => {
+        <div
+          className={cn(
+            viewMode === "split"
+              ? "grid grid-cols-1 lg:grid-cols-12 gap-6 items-start"
+              : "space-y-3"
+          )}
+        >
+          <div
+            className={cn(
+              viewMode === "split"
+                ? "lg:col-span-6 space-y-3 max-h-[700px] overflow-y-auto pr-1.5"
+                : "space-y-3"
+            )}
+          >
+            {filteredLeads.map((lead) => {
             const mainGap = lead.gapsFound && lead.gapsFound.length > 0 ? lead.gapsFound[0] : null;
             const leadTags = lead.tags || [];
             const isPickerOpen = activeTagPickerId === lead.id;
@@ -2313,10 +2523,18 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
                     {/* Location & Google Rating */}
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-neutral-500">
                       {lead.location && (
-                        <span className="flex items-center gap-1">
-                          <MapPin className="h-3.5 w-3.5 text-neutral-400" />
-                          {lead.location}
-                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setFocusedLeadOnMap(lead);
+                            setViewMode("map");
+                          }}
+                          className="flex items-center gap-1 hover:text-emerald-700 transition-colors group cursor-pointer text-left"
+                          title="Locate on Google Map"
+                        >
+                          <MapPin className="h-3.5 w-3.5 text-emerald-600 group-hover:scale-110 transition-transform" />
+                          <span className="hover:underline">{lead.location}</span>
+                        </button>
                       )}
 
                       <span className="flex items-center gap-1 font-medium text-neutral-700">
@@ -2475,6 +2693,20 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
                     <Button
                       size="sm"
                       variant="outline"
+                      onClick={() => {
+                        setFocusedLeadOnMap(lead);
+                        setViewMode("map");
+                      }}
+                      className="gap-1.5 text-xs font-semibold text-neutral-700 hover:text-emerald-700 hover:border-emerald-300"
+                      title="View lead location on Google Map"
+                    >
+                      <MapIcon className="h-3.5 w-3.5 text-emerald-600" />
+                      <span className="hidden sm:inline">Map</span>
+                    </Button>
+
+                    <Button
+                      size="sm"
+                      variant="outline"
                       onClick={() => setSelectedLeadForTemplate(lead)}
                       className="gap-1.5 text-xs font-semibold text-neutral-700 hover:text-primary hover:border-primary/40"
                       title="Apply custom outreach template with auto-inserted AI pitch"
@@ -2495,8 +2727,23 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
             </div>
           );
         })}
+          </div>
+
+          {viewMode === "split" && (
+            <div className="lg:col-span-6 sticky top-4">
+              <LeadsMapView
+                leads={filteredLeads}
+                selectedLeadId={focusedLeadOnMap?.id}
+                onSelectLead={setFocusedLeadOnMap}
+                onUpdateStatus={handleUpdateLeadStatus}
+                className="h-[680px]"
+              />
+            </div>
+          )}
+        </div>
+      )}
+        </div>
       </div>
-    )}
 
     {/* Floating Bulk Actions Bar */}
     {selectedLeadIds.size > 0 && (

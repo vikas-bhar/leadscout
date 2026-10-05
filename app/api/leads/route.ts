@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireApiUser } from "@/lib/supabase";
+import { deduplicateLeads } from "@/lib/deduplication";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +19,8 @@ export async function GET() {
       return NextResponse.json({ leads: [] });
     }
 
-    return NextResponse.json({ leads: data ?? [] });
+    const cleanLeads = deduplicateLeads(data ?? []);
+    return NextResponse.json({ leads: cleanLeads });
   } catch (error) {
     console.log("GET /api/leads error:", error);
     return NextResponse.json({ leads: [] });

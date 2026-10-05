@@ -19,6 +19,7 @@ import {
   type CustomPromptConfig,
   type RawBusinessData,
 } from "@/lib/customization/promptBuilder";
+import { normalizeBusinessName } from "@/lib/deduplication";
 
 export interface PipelineInput {
   userId: string;
@@ -84,10 +85,27 @@ export async function runPipeline(
     await onProgress(2, TOTAL_STEPS, `Searching Google Maps for ${searchCategoryTerm} in ${locationQuery}...`);
     const searchQuery = `${searchCategoryTerm} in ${locationQuery}`;
     
-    // Combine exclusions
+    // Combine exclusions (client provided + custom filter + database existing leads)
+    const dbExcludedNames: string[] = [];
+    try {
+      const { data: dbLeads } = await supabase
+        .from("leads")
+        .select("business_name")
+        .eq("user_id", input.userId)
+        .limit(500);
+      if (Array.isArray(dbLeads)) {
+        dbLeads.forEach((l) => {
+          if (l.business_name) dbExcludedNames.push(l.business_name);
+        });
+      }
+    } catch {
+      // Non-blocking
+    }
+
     const combinedExclusions = [
       ...(input.excludeNames || []),
       ...(input.customFilter?.exclusionKeywords || []),
+      ...dbExcludedNames,
     ];
 
     const mapsResults = await scrapeGoogleMaps(
@@ -512,7 +530,25 @@ export async function runPipeline(
     });
 
     try {
-      await supabase.from("leads").insert(leadsToInsert);
+      // Deduplicate before inserting into Supabase
+      const { data: existingUserLeads } = await supabase
+        .from("leads")
+        .select("business_name, phone")
+        .eq("user_id", input.userId);
+
+      const existingNames = new Set(
+        (existingUserLeads || []).map((l) => normalizeBusinessName(l.business_name)).filter(Boolean)
+      );
+
+      const uniqueLeadsToInsert = leadsToInsert.filter((l) => {
+        const norm = normalizeBusinessName(l.business_name);
+        return !existingNames.has(norm);
+      });
+
+      if (uniqueLeadsToInsert.length > 0) {
+        await supabase.from("leads").insert(uniqueLeadsToInsert);
+      }
+
       await supabase
         .from("searches")
         .update({

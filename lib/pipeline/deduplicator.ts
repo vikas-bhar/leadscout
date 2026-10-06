@@ -4,6 +4,8 @@ import {
   normalizePhoneNumber,
   normalizeWebsiteDomain,
   normalizeLocation,
+  extractCity,
+  calculateStringSimilarity,
 } from "@/lib/deduplication";
 
 export function deduplicateBusinesses<T extends {
@@ -41,10 +43,19 @@ export function deduplicateBusinesses<T extends {
 
     const normName = normalizeBusinessName(b.name);
     const normLoc = normalizeLocation(b.address);
-    if (normName && normLoc) {
-      keys.push(`nameloc:${normName}|${normLoc.slice(0, 15)}`);
-    } else if (normName && normName.length >= 6) {
+    const city = extractCity(b.address);
+
+    // Register normalized name
+    if (normName && normName.length >= 3) {
       keys.push(`name:${normName}`);
+    }
+
+    if (normName && normLoc) {
+      keys.push(`nameloc:${normName}|${normLoc.slice(0, 20)}`);
+    }
+
+    if (normName && city) {
+      keys.push(`namecity:${normName}|${city}`);
     }
 
     // Check if any key matches an existing entry
@@ -53,6 +64,19 @@ export function deduplicateBusinesses<T extends {
       if (keyToIndex.has(k)) {
         existingIndex = keyToIndex.get(k)!;
         break;
+      }
+    }
+
+    // Secondary check: fuzzy name match if in same city
+    if (existingIndex === -1 && normName && normName.length >= 4 && uniqueList.length > 0) {
+      for (let i = 0; i < uniqueList.length; i++) {
+        const existing = uniqueList[i];
+        const exName = normalizeBusinessName(existing.name);
+        const exCity = extractCity(existing.address);
+        if (exName && (exName === normName || (city && exCity && city === exCity && calculateStringSimilarity(normName, exName) >= 0.85))) {
+          existingIndex = i;
+          break;
+        }
       }
     }
 
@@ -86,5 +110,14 @@ function dataCompleteness(b: {
   reviews?: Array<unknown>;
   coordinates?: { lat: number; lng: number } | null;
 }): number {
-  return [b.name, b.address, b.rating !== null && b.rating !== undefined, b.website, b.phone, (b.photoCount || 0) > 0, (b.reviews?.length || 0) > 0, b.coordinates].filter(Boolean).length;
+  return [
+    b.name,
+    b.address,
+    b.rating !== null && b.rating !== undefined,
+    b.website,
+    b.phone,
+    (b.photoCount || 0) > 0,
+    (b.reviews?.length || 0) > 0,
+    b.coordinates,
+  ].filter(Boolean).length;
 }

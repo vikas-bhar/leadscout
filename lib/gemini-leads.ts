@@ -61,7 +61,7 @@ export async function findRealBusinessesWithGemini({
     const fullLocationSpec = userLocation ? userLocation : `${targetArea}${targetCity}${targetCountry ? `, ${targetCountry}` : ""}`;
     const exclusionsText =
       excludeBusinesses && excludeBusinesses.length > 0
-        ? `\n8. EXCLUSION REQUIREMENT: Do NOT include any of the following businesses which have already been discovered: ${excludeBusinesses.slice(0, 15).join(", ")}. Find NEW, DIFFERENT businesses.`
+        ? `\n8. EXCLUSION MANDATE (STRICT ZERO REPEAT): The user already has discovered the following ${excludeBusinesses.length} businesses: ${excludeBusinesses.slice(0, 80).join(", ")}. You MUST NOT return any of these businesses or variants of them. You must return completely NEW, UNSEEN, DIFFERENT businesses.`
         : "";
 
     const websiteRequirementText = requireNoWebsite

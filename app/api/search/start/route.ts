@@ -4,7 +4,7 @@ import { requireApiUser } from "@/lib/supabase";
 import { getCreditBalance } from "@/lib/credits";
 import { runPipeline, calculateCredits } from "@/lib/pipeline/masterPipeline";
 import { normalizeWebsiteUrl, isValidWebsiteUrl } from "@/lib/pipeline/cleaner";
-import { generateDeterministicLeadId, deduplicateLeads } from "@/lib/deduplication";
+import { generateDeterministicLeadId, deduplicateLeads, isBusinessExcluded } from "@/lib/deduplication";
 import type { Lead, CustomClientFilter, AgentAnalysis, PitchSet } from "@/types";
 import type { AIAnalysis } from "@/lib/pipeline/stages/stage5_ai";
 
@@ -23,6 +23,8 @@ const searchRequestSchema = z.object({
   specificPlace: z.string().optional(),
   excludeNames: z.array(z.string()).optional(),
   excludePlaceIds: z.array(z.string()).optional(),
+  excludePhones: z.array(z.string()).optional(),
+  excludeDomains: z.array(z.string()).optional(),
   filters: z.any().optional(),
   searchFilters: z.any().optional(),
   customFilter: z.any().optional(),
@@ -108,6 +110,8 @@ export async function POST(request: NextRequest) {
         resultCount: targetResults,
         excludeNames: parsed.excludeNames,
         excludePlaceIds: parsed.excludePlaceIds,
+        excludePhones: parsed.excludePhones,
+        excludeDomains: parsed.excludeDomains,
         searchFilters: parsed.filters || parsed.searchFilters,
         customFilter,
         customPromptConfig: parsed.customPromptConfig,
@@ -268,7 +272,27 @@ export async function POST(request: NextRequest) {
       ? formattedLeads.filter((l) => !isValidWebsiteUrl(l.websiteUrl) && !l.hasWebsite)
       : formattedLeads;
 
-    const finalLeads = deduplicateLeads(filtered);
+    // Filter out any business matching previously discovered exclusions to ensure leads are NEVER repeated
+    const nonRepeated = filtered.filter((lead) => {
+      return !isBusinessExcluded(
+        {
+          name: lead.businessName,
+          phone: lead.phone,
+          website: lead.websiteUrl,
+          placeId: lead.id,
+          address: lead.location,
+        },
+        {
+          names: parsed.excludeNames || [],
+          phones: parsed.excludePhones || [],
+          domains: parsed.excludeDomains || [],
+          placeIds: parsed.excludePlaceIds || [],
+        }
+      );
+    });
+
+    const finalCandidates = nonRepeated.length > 0 ? nonRepeated : filtered;
+    const finalLeads = deduplicateLeads(finalCandidates);
 
     return NextResponse.json({
       success: true,

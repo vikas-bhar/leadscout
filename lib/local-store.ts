@@ -6,6 +6,7 @@ import {
   generateDeterministicLeadId,
   normalizeBusinessName,
   normalizePhoneNumber,
+  normalizeWebsiteDomain,
 } from "@/lib/deduplication";
 
 export interface StoredSearch {
@@ -416,6 +417,7 @@ export function deleteLocalLeadsBulk(ids: string[]): void {
 export function getDiscoveredBusinessFingerprints(): {
   names: string[];
   phoneNumbers: string[];
+  domains: string[];
   placeIds: string[];
 } {
   const store = getStore();
@@ -425,6 +427,9 @@ export function getDiscoveredBusinessFingerprints(): {
   const phoneNumbers = store.leads
     .map((l) => normalizePhoneNumber(l.phone))
     .filter((p) => p.length >= 7);
+  const domains = store.leads
+    .map((l) => normalizeWebsiteDomain(l.websiteUrl))
+    .filter(Boolean);
   const placeIds = store.leads
     .map((l) => {
       const raw = l as unknown as { placeId?: string; place_id?: string };
@@ -435,6 +440,7 @@ export function getDiscoveredBusinessFingerprints(): {
   return {
     names: Array.from(new Set(names)),
     phoneNumbers: Array.from(new Set(phoneNumbers)),
+    domains: Array.from(new Set(domains)),
     placeIds: Array.from(new Set(placeIds)),
   };
 }

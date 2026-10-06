@@ -34,6 +34,8 @@ export interface PipelineInput {
   resultCount: number;
   excludeNames?: string[];
   excludePlaceIds?: string[];
+  excludePhones?: string[];
+  excludeDomains?: string[];
   searchFilters?: SearchFilters;
   customFilter?: CustomClientFilter;
   customPromptConfig?: CustomPromptConfig;
@@ -87,15 +89,21 @@ export async function runPipeline(
     
     // Combine exclusions (client provided + custom filter + database existing leads)
     const dbExcludedNames: string[] = [];
+    const dbExcludedPhones: string[] = [];
+    const dbExcludedDomains: string[] = [];
+    const dbExcludedPlaceIds: string[] = [];
     try {
       const { data: dbLeads } = await supabase
         .from("leads")
-        .select("business_name")
+        .select("business_name, phone, website_url, place_id")
         .eq("user_id", input.userId)
-        .limit(500);
+        .limit(1000);
       if (Array.isArray(dbLeads)) {
         dbLeads.forEach((l) => {
           if (l.business_name) dbExcludedNames.push(l.business_name);
+          if (l.phone) dbExcludedPhones.push(l.phone);
+          if (l.website_url) dbExcludedDomains.push(l.website_url);
+          if (l.place_id) dbExcludedPlaceIds.push(l.place_id);
         });
       }
     } catch {
@@ -108,6 +116,21 @@ export async function runPipeline(
       ...dbExcludedNames,
     ];
 
+    const combinedPhones = [
+      ...(input.excludePhones || []),
+      ...dbExcludedPhones,
+    ];
+
+    const combinedDomains = [
+      ...(input.excludeDomains || []),
+      ...dbExcludedDomains,
+    ];
+
+    const combinedPlaceIds = [
+      ...(input.excludePlaceIds || []),
+      ...dbExcludedPlaceIds,
+    ];
+
     const mapsResults = await scrapeGoogleMaps(
       searchQuery,
       input.resultCount || 10,
@@ -115,7 +138,9 @@ export async function runPipeline(
         await onProgress(2, TOTAL_STEPS, msg);
       },
       combinedExclusions,
-      input.excludePlaceIds
+      combinedPlaceIds,
+      combinedPhones,
+      combinedDomains
     );
 
     // Step 3 — Filter and Score
@@ -549,15 +574,31 @@ export async function runPipeline(
         await supabase.from("leads").insert(uniqueLeadsToInsert);
       }
 
+      // Filter ranked leads so the user ONLY receives truly NEW, non-duplicate leads
+      const cleanRanked = ranked.filter((r) => {
+        const norm = normalizeBusinessName(r.business.name);
+        return !existingNames.has(norm);
+      });
+
+      const finalRanked = cleanRanked.length > 0 ? cleanRanked : ranked;
+
       await supabase
         .from("searches")
         .update({
           status: "completed",
-          results_count: ranked.length,
+          results_count: finalRanked.length,
           progress: 100,
-          progress_message: `Found ${ranked.length} high-opportunity leads`,
+          progress_message: `Found ${finalRanked.length} high-opportunity leads`,
         })
         .eq("id", input.searchId);
+
+      return {
+        success: true,
+        leads: finalRanked,
+        totalFound: mapsResults.length,
+        totalWithGaps: filtered.length,
+        creditsUsed: creditsToDeduct,
+      };
     } catch (dbErr) {
       console.log("Database persist notice (falling back to memory):", dbErr);
     }

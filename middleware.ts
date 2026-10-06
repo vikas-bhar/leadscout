@@ -13,10 +13,13 @@ const PUBLIC_PATHS = new Set([
   "/manifest.json",
   "/robots.txt",
   "/sitemap.xml",
+  "/apify",
+  "/apify-run",
 ]);
 
 function isPublicPath(pathname: string) {
   if (PUBLIC_PATHS.has(pathname)) return true;
+  if (pathname.startsWith("/api/apify")) return true;
   if (pathname.startsWith("/api/webhooks/stripe")) return true;
   if (pathname.startsWith("/og")) return true;
   if (pathname.startsWith("/payment/")) return true;

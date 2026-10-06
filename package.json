@@ -4,8 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev -p 3000 -H 0.0.0.0",
-    "build": "next build",
-    "start": "next start",
+    "build": "NODE_ENV=production next build",
+    "start": "next start -H 0.0.0.0",
     "lint": "next lint"
   },
   "dependencies": {
@@ -39,7 +39,6 @@
     "zustand": "^5.0.15"
   },
   "devDependencies": {
-    "@types/google.maps": "^3.66.5",
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",

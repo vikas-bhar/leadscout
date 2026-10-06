@@ -27,7 +27,7 @@ export function FinalCTA() {
               className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-4 bg-white hover:bg-gray-100 text-blue-600 font-bold rounded-xl shadow-xl transition-all"
             >
               <Compass className="w-5 h-5" />
-              <span>Go to Console</span>
+              <span>Get Started</span>
               <ArrowRight className="w-4 h-4" />
             </Link>
           ) : (

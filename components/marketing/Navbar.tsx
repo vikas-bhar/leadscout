@@ -62,7 +62,7 @@ export function Navbar() {
               className="inline-flex items-center justify-center gap-2 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 px-5 py-2 rounded-lg shadow-sm transition-all hover:shadow"
             >
               <Compass className="w-4 h-4" />
-              <span>Console</span>
+              <span>Get Started</span>
             </Link>
           ) : (
             <>
@@ -133,7 +133,7 @@ export function Navbar() {
                 className="w-full text-center py-2.5 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow flex items-center justify-center gap-2"
               >
                 <Compass className="w-4 h-4" />
-                <span>Console</span>
+                <span>Get Started</span>
               </Link>
             ) : (
               <>

@@ -20,20 +20,11 @@ import {
 } from "lucide-react";
 import { type Lead, type LeadFolder } from "@/types";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import {
   getLocalLeads,
   updateLocalLead,
   getLocalFolders,
-  createLocalFolder,
   assignLeadsToFolderBulk,
   deleteLocalLead,
   deleteLocalLeadsBulk,
@@ -48,34 +39,18 @@ interface LeadsViewProps {
   initialLeads: Lead[];
 }
 
-const PRESET_FOLDER_COLORS = [
-  "#f43f5e",
-  "#8b5cf6",
-  "#06b6d4",
-  "#10b981",
-  "#f59e0b",
-  "#3b82f6",
-];
-
 export function LeadsView({ initialLeads }: LeadsViewProps) {
   const [leadsList, setLeadsList] = useState<Lead[]>(initialLeads);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
-  const [filterScoreTier, setFilterScoreTier] = useState<"all" | "high" | "medium" | "low">("all");
-  const [selectedFolder, setSelectedFolder] = useState<string>("all");
-  const [sortBy, setSortBy] = useState<"score_desc" | "time_desc" | "name_asc">("score_desc");
 
   // Selection & Bulk Actions
   const [selectedLeadIds, setSelectedLeadIds] = useState<Set<string>>(new Set());
   const [showBulkMoveDropdown, setShowBulkMoveDropdown] = useState(false);
   const bulkMoveRef = useRef<HTMLDivElement>(null);
 
-  // Folders & Modal
-  const [folders, setFolders] = useState<LeadFolder[]>(() => getLocalFolders());
-  const [isFolderModalOpen, setIsFolderModalOpen] = useState(false);
-  const [newFolderName, setNewFolderName] = useState("");
-  const [newFolderColor, setNewFolderColor] = useState(PRESET_FOLDER_COLORS[0]);
-  const [newFolderDesc, setNewFolderDesc] = useState("");
+  // Folders for bulk move
+  const [folders] = useState<LeadFolder[]>(() => getLocalFolders());
 
   // Outreach Template Modal
   const [selectedLeadForTemplate, setSelectedLeadForTemplate] = useState<Lead | null>(null);
@@ -138,22 +113,6 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
     return deduplicateLeads(mapped);
   }, [leadsList]);
 
-  // Territory locations for quick folder-like filtering
-  const locationOptions = useMemo(() => {
-    const counts = new Map<string, number>();
-    normalizedLeads.forEach((l) => {
-      if (!l.location) return;
-      const primaryCity = l.location.split(",")[0]?.trim();
-      if (primaryCity) {
-        counts.set(primaryCity, (counts.get(primaryCity) || 0) + 1);
-      }
-    });
-    return Array.from(counts.entries())
-      .map(([name, count]) => ({ name, count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 6);
-  }, [normalizedLeads]);
-
   // Lead status counts
   const statusCounts = useMemo(() => {
     const counts: Record<string, number> = {
@@ -172,32 +131,13 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
     return counts;
   }, [normalizedLeads]);
 
-  // Filtered and sorted leads
+  // Filtered leads
   const filteredLeads = useMemo(() => {
     return normalizedLeads
       .filter((lead) => {
         // Status filter
         if (selectedStatus !== "all" && lead.status !== selectedStatus) {
           return false;
-        }
-
-        // Score Tier filter
-        if (filterScoreTier === "high" && lead.opportunityScore < 75) return false;
-        if (
-          filterScoreTier === "medium" &&
-          (lead.opportunityScore < 60 || lead.opportunityScore >= 75)
-        )
-          return false;
-        if (filterScoreTier === "low" && lead.opportunityScore >= 60) return false;
-
-        // Folder filter
-        if (selectedFolder !== "all") {
-          if (selectedFolder.startsWith("loc:")) {
-            const locQuery = selectedFolder.replace("loc:", "").toLowerCase();
-            if (!lead.location.toLowerCase().includes(locQuery)) return false;
-          } else if (lead.folderId !== selectedFolder) {
-            return false;
-          }
         }
 
         // Text search
@@ -216,28 +156,12 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
 
         return true;
       })
-      .sort((a, b) => {
-        if (sortBy === "score_desc") return b.opportunityScore - a.opportunityScore;
-        if (sortBy === "time_desc") {
-          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-        }
-        if (sortBy === "name_asc") return a.businessName.localeCompare(b.businessName);
-        return 0;
-      });
-  }, [normalizedLeads, selectedStatus, filterScoreTier, selectedFolder, searchQuery, sortBy]);
-
-  const hasActiveFilters =
-    selectedStatus !== "all" ||
-    filterScoreTier !== "all" ||
-    selectedFolder !== "all" ||
-    Boolean(searchQuery.trim());
+      .sort((a, b) => b.opportunityScore - a.opportunityScore);
+  }, [normalizedLeads, selectedStatus, searchQuery]);
 
   function resetFilters() {
     setSelectedStatus("all");
-    setFilterScoreTier("all");
-    setSelectedFolder("all");
     setSearchQuery("");
-    setSortBy("score_desc");
   }
 
   // Update lead status
@@ -366,23 +290,6 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
     }
   }
 
-  // Create folder
-  function handleCreateFolderSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!newFolderName.trim()) return;
-    const folder = createLocalFolder(
-      newFolderName.trim(),
-      newFolderColor,
-      newFolderDesc.trim()
-    );
-    setFolders(getLocalFolders());
-    setSelectedFolder(folder.id);
-    setIsFolderModalOpen(false);
-    setNewFolderName("");
-    setNewFolderDesc("");
-    toast.success(`Created folder "${folder.name}"`);
-  }
-
   if (normalizedLeads.length === 0) {
     return (
       <div className="max-w-xl mx-auto py-20 px-4 text-center space-y-6">
@@ -422,6 +329,26 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {/* Quick Search */}
+          <div className="relative w-44 sm:w-56">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-neutral-400" />
+            <input
+              type="text"
+              placeholder="Search leads..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-8 pr-7 h-9 rounded-lg border border-neutral-200 bg-white text-xs text-neutral-800 placeholder:text-neutral-400 focus:outline-none focus:ring-1 focus:ring-neutral-400"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            )}
+          </div>
           <Button
             variant="outline"
             size="sm"
@@ -430,7 +357,7 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
             title="Scan and remove duplicate leads"
           >
             <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
-            <span>Deduplicate</span>
+            <span className="hidden sm:inline">Deduplicate</span>
           </Button>
           <Link href="/search">
             <Button size="sm" className="h-9 gap-1.5 text-xs font-medium">
@@ -441,8 +368,8 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
         </div>
       </div>
 
-      {/* Segmented Status Tabs */}
-      <div className="flex items-center justify-between border-b border-neutral-200 pb-3">
+      {/* Segmented Status Tabs & Select All */}
+      <div className="flex items-center justify-between border-b border-neutral-200 pb-3 gap-2">
         <div className="flex items-center gap-1 overflow-x-auto">
           {[
             { id: "all", label: "All Leads", count: statusCounts.all },
@@ -478,116 +405,18 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
           })}
         </div>
 
-        {/* Quiet summary counters */}
-        <div className="hidden md:flex items-center gap-3 text-xs text-neutral-500">
-          <span>
-            High Opportunity:{" "}
-            <strong className="text-neutral-800 font-mono tabular-nums">
-              {normalizedLeads.filter((l) => l.opportunityScore >= 75).length}
-            </strong>
-          </span>
-          <span aria-hidden="true">·</span>
-          <span>
-            Total:{" "}
-            <strong className="text-neutral-800 font-mono tabular-nums">
-              {normalizedLeads.length}
-            </strong>
-          </span>
-        </div>
-      </div>
-
-      {/* Unified, Clean Search & Filter Toolbar */}
-      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-2.5 flex-1">
-          {/* Search Input */}
-          <div className="relative flex-1 min-w-[200px] max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-neutral-400" />
-            <input
-              type="text"
-              placeholder="Search leads by name, city, or gap..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-8 h-9 rounded-lg border border-neutral-200 bg-white text-xs text-neutral-800 placeholder:text-neutral-400 focus:outline-none focus:ring-1 focus:ring-neutral-400"
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={() => setSearchQuery("")}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            )}
-          </div>
-
-          {/* Folder Filter */}
-          <select
-            value={selectedFolder}
-            onChange={(e) => {
-              if (e.target.value === "__create__") {
-                setIsFolderModalOpen(true);
-              } else {
-                setSelectedFolder(e.target.value);
-              }
-            }}
-            className="h-9 px-2.5 rounded-lg border border-neutral-200 bg-white text-xs text-neutral-700 font-medium focus:outline-none focus:ring-1 focus:ring-neutral-400 cursor-pointer"
-          >
-            <option value="all">All Folders</option>
-            {folders.map((f) => (
-              <option key={f.id} value={f.id}>
-                {f.name}
-              </option>
-            ))}
-            {locationOptions.length > 0 && (
-              <optgroup label="Locations">
-                {locationOptions.map((loc) => (
-                  <option key={loc.name} value={`loc:${loc.name}`}>
-                    {loc.name} ({loc.count})
-                  </option>
-                ))}
-              </optgroup>
-            )}
-            <option value="__create__">+ New Folder...</option>
-          </select>
-
-          {/* Opportunity Score Tier */}
-          <select
-            value={filterScoreTier}
-            onChange={(e) => setFilterScoreTier(e.target.value as typeof filterScoreTier)}
-            className="h-9 px-2.5 rounded-lg border border-neutral-200 bg-white text-xs text-neutral-700 font-medium focus:outline-none focus:ring-1 focus:ring-neutral-400 cursor-pointer"
-          >
-            <option value="all">All Scores</option>
-            <option value="high">High Opportunity (75+)</option>
-            <option value="medium">Medium (60–74)</option>
-            <option value="low">Low (&lt;60)</option>
-          </select>
-
-          {/* Sort */}
-          <select
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
-            className="h-9 px-2.5 rounded-lg border border-neutral-200 bg-white text-xs text-neutral-700 font-medium focus:outline-none focus:ring-1 focus:ring-neutral-400 cursor-pointer"
-          >
-            <option value="score_desc">Score: High to Low</option>
-            <option value="time_desc">Newest Added</option>
-            <option value="name_asc">Business Name A–Z</option>
-          </select>
-
-          {/* Reset Filters button */}
-          {hasActiveFilters && (
+        {/* Right side: Select All Toggle */}
+        <div className="flex items-center gap-2 shrink-0">
+          {searchQuery && (
             <button
               type="button"
               onClick={resetFilters}
-              className="inline-flex items-center gap-1 text-xs text-neutral-500 hover:text-neutral-900 transition-colors ml-1"
+              className="inline-flex items-center gap-1 text-xs text-neutral-500 hover:text-neutral-900 transition-colors mr-1"
             >
               <RotateCcw className="h-3 w-3" />
               <span>Reset</span>
             </button>
           )}
-        </div>
-
-        {/* Select All Toggle */}
-        <div className="flex items-center justify-between sm:justify-end gap-3 text-xs text-neutral-500">
           <button
             type="button"
             onClick={toggleSelectAll}
@@ -888,71 +717,6 @@ export function LeadsView({ initialLeads }: LeadsViewProps) {
           defaultChannel="email"
         />
       )}
-
-      {/* Create Folder Modal */}
-      <Dialog open={isFolderModalOpen} onOpenChange={setIsFolderModalOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-base font-semibold">
-              Create New Folder
-            </DialogTitle>
-          </DialogHeader>
-          <form onSubmit={handleCreateFolderSubmit} className="space-y-4 pt-2">
-            <div>
-              <Label className="text-xs font-medium text-neutral-700">Folder Name</Label>
-              <Input
-                required
-                placeholder="e.g. High Priority Outreach"
-                value={newFolderName}
-                onChange={(e) => setNewFolderName(e.target.value)}
-                className="mt-1 h-8 text-xs"
-              />
-            </div>
-            <div>
-              <Label className="text-xs font-medium text-neutral-700">Description (Optional)</Label>
-              <Input
-                placeholder="Targeting specific industry or angle"
-                value={newFolderDesc}
-                onChange={(e) => setNewFolderDesc(e.target.value)}
-                className="mt-1 h-8 text-xs"
-              />
-            </div>
-            <div>
-              <Label className="text-xs font-medium text-neutral-700">Color Tag</Label>
-              <div className="flex items-center gap-2 mt-1.5">
-                {PRESET_FOLDER_COLORS.map((c) => (
-                  <button
-                    key={c}
-                    type="button"
-                    onClick={() => setNewFolderColor(c)}
-                    className={cn(
-                      "h-6 w-6 rounded-full border transition-transform",
-                      newFolderColor === c
-                        ? "scale-110 ring-2 ring-offset-1 ring-neutral-900"
-                        : "opacity-70 hover:opacity-100"
-                    )}
-                    style={{ backgroundColor: c }}
-                  />
-                ))}
-              </div>
-            </div>
-            <div className="flex justify-end gap-2 pt-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setIsFolderModalOpen(false)}
-                className="text-xs"
-              >
-                Cancel
-              </Button>
-              <Button type="submit" size="sm" className="text-xs">
-                Create Folder
-              </Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

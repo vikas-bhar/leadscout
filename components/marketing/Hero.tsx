@@ -45,7 +45,7 @@ export function Hero() {
                   className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-7 py-3.5 text-base font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-lg shadow-blue-500/25 transition-all hover:translate-y-[-1px]"
                 >
                   <Compass className="w-5 h-5" />
-                  <span>Console</span>
+                  <span>Get Started</span>
                   <ArrowRight className="w-4 h-4" />
                 </Link>
               ) : (

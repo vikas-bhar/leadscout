@@ -290,7 +290,7 @@ export function Pricing() {
                         : 'bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-900 dark:text-white'
                     }`}
                   >
-                    <span>{isSignedIn ? (plan.id === 'free' ? 'Go to Console' : 'Manage in Console') : plan.cta}</span>
+                    <span>{isSignedIn ? (plan.id === 'free' ? 'Get Started' : 'Manage Subscription') : plan.cta}</span>
                     <ArrowRight className="w-3.5 h-3.5" />
                   </Link>
                 </div>
@@ -370,7 +370,7 @@ export function Pricing() {
                       : 'bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-900 dark:text-white'
                   }`}
                 >
-                  <span>{isSignedIn ? 'Buy in Console' : pack.cta}</span>
+                  <span>{isSignedIn ? 'Get Credits' : pack.cta}</span>
                   <ArrowRight className="w-3.5 h-3.5" />
                 </Link>
               </div>

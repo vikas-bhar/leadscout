@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic";
 const DEFAULT_TOKEN =
   process.env.APIFY_API_TOKEN ||
   process.env.APIFY_TOKEN ||
-  "apify_api_8LqgqPi05asVvF0Ng2QUAm2csk5ZER4B7a7i";
+  "";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);

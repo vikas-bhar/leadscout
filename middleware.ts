@@ -7,6 +7,8 @@ const PUBLIC_PATHS = new Set([
   "/signup",
   "/pricing",
   "/features",
+  "/privacy",
+  "/terms",
   "/onboarding",
   "/payment/success",
   "/payment/cancelled",
@@ -81,6 +83,11 @@ export async function middleware(request: NextRequest) {
 
   // Allow public paths (e.g. /login, /signup)
   if (publicPath) {
+    return NextResponse.next();
+  }
+
+  // When Supabase is not configured, allow testing in standalone guest/demo mode
+  if (!isSupabaseConfigured()) {
     return NextResponse.next();
   }
 

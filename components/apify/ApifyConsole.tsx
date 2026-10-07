@@ -16,7 +16,7 @@ import { toast } from "sonner";
 const DEFAULT_RUN_ID = "nIH0dNyLGe66edgys";
 const DEFAULT_KVS_ID = "BuQtnXkouKFscVWBd";
 const DEFAULT_DATASET_ID = "b1wOSq2O5NFTnJfpi";
-const DEFAULT_TOKEN = "apify_api_8LqgqPi05asVvF0Ng2QUAm2csk5ZER4B7a7i";
+const DEFAULT_TOKEN = "";
 
 export function ApifyConsole() {
   const [runId, setRunId] = useState(DEFAULT_RUN_ID);

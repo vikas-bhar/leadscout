@@ -6,20 +6,19 @@ import {
   normalizeBusinessName,
   normalizePhoneNumber,
   normalizeWebsiteDomain,
-  normalizeLocation,
   isBusinessExcluded,
 } from "@/lib/deduplication";
 
 const apifyToken =
   process.env.APIFY_API_TOKEN ||
   process.env.APIFY_TOKEN ||
-  "apify_api_8LqgqPi05asVvF0Ng2QUAm2csk5ZER4B7a7i";
+  "";
 const apifyClient = apifyToken ? new ApifyClient({ token: apifyToken }) : null;
 const googleMapsApiKey =
   process.env.GOOGLE_MAPS_API_KEY ||
   process.env.GOOGLE_PLACES_API_KEY ||
   process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ||
-  "AIzaSyBNmmYoSMetk-CimjXh060-rDPvYd50YQ0";
+  "";
 
 export interface MapsResult {
   placeId: string;

@@ -421,7 +421,7 @@ export function isBusinessExcluded(
 
   // Fuzzy match against excluded names
   if (normName && normName.length >= 4) {
-    for (const exName of namesSet) {
+    for (const exName of Array.from(namesSet)) {
       if (exName && (exName === normName || exName.includes(normName) || normName.includes(exName))) {
         return true;
       }

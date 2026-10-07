@@ -25,6 +25,13 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
+declare global {
+  interface Window {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    google?: any;
+  }
+}
+
 // Known coordinates for top metropolitan areas & states to ensure instant zero-latency map rendering
 const KNOWN_CITY_COORDINATES: Record<string, { lat: number; lng: number }> = {
   // US Major Cities
@@ -85,7 +92,11 @@ const KNOWN_CITY_COORDINATES: Record<string, { lat: number; lng: number }> = {
 };
 
 // Clean modern Google Maps styling
-const MODERN_MAP_STYLE: google.maps.MapTypeStyle[] = [
+const MODERN_MAP_STYLE: Array<{
+  featureType?: string;
+  elementType?: string;
+  stylers: Array<Record<string, string | number | boolean>>;
+}> = [
   {
     featureType: "administrative",
     elementType: "labels.text.fill",
@@ -204,9 +215,12 @@ export function LeadsMapView({
   className,
 }: LeadsMapViewProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
-  const mapInstanceRef = useRef<google.maps.Map | null>(null);
-  const markersRef = useRef<Map<string, google.maps.Marker>>(new Map());
-  const infoWindowRef = useRef<google.maps.InfoWindow | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const mapInstanceRef = useRef<any | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const markersRef = useRef<Map<string, any>>(new Map());
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const infoWindowRef = useRef<any | null>(null);
 
   const [isScriptLoaded, setIsScriptLoaded] = useState<boolean>(false);
   const [mapError, setMapError] = useState<string | null>(null);
@@ -249,8 +263,8 @@ export function LeadsMapView({
           }
         }
 
-        // Standard key fallback
-        apiKey = apiKey || "AIzaSyBNmmYoSMetk-CimjXh060-rDPvYd50YQ0";
+        // If no key found, use key from props or empty
+        apiKey = apiKey || "";
 
         // Check if script tag is already in DOM
         const existingScript = document.getElementById("google-maps-script");

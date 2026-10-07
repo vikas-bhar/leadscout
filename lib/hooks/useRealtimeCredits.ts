@@ -27,6 +27,14 @@ export function useRealtimeCredits() {
         const res = await fetch("/api/credits/balance");
         if (res.ok) {
           const data = await res.json();
+          // If in guest mode, do not overwrite modified local balance
+          if (data.isGuest) {
+            const currentLocal = getLocalBalance();
+            if (currentLocal && typeof currentLocal.availableCredits === "number") {
+              setBalance(currentLocal);
+              return;
+            }
+          }
           if (active && typeof data.availableCredits === "number") {
             const fresh: CreditBalance = {
               totalCredits: data.totalCredits ?? 20,

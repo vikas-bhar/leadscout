@@ -133,11 +133,19 @@ export function SearchView({
   useEffect(() => {
     let cancelled = false;
 
+    // Immediately restore persisted local balance
+    const local = getLocalBalance();
+    if (local && typeof local.availableCredits === "number") {
+      setAvailableCredits(local.availableCredits);
+    }
+
     async function fetchServerCredits() {
       try {
         const res = await fetch("/api/credits/balance");
         if (!res.ok) return;
         const data = await res.json();
+        // If guest mode, keep persisted local balance
+        if (data.isGuest) return;
         if (!cancelled && typeof data.availableCredits === "number") {
           setAvailableCredits(data.availableCredits);
         }

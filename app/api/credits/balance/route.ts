@@ -7,7 +7,17 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   try {
     const auth = await requireApiUser();
-    if (!auth.user) return auth.response;
+    if (!auth.user) {
+      return NextResponse.json({
+        totalCredits: 20,
+        usedCredits: 0,
+        availableCredits: 20,
+        total_credits: 20,
+        used_credits: 0,
+        available_credits: 20,
+        isGuest: true,
+      });
+    }
 
     // Use the authenticated client so RLS allows reading user_credits
     const balance = await getCreditBalance(auth.user.id, auth.supabase);
@@ -23,6 +33,7 @@ export async function GET() {
       total_credits: totalCredits,
       used_credits: usedCredits,
       available_credits: availableCredits,
+      isGuest: false,
     });
   } catch (error) {
     console.log("GET /api/credits/balance error", error);
@@ -33,6 +44,7 @@ export async function GET() {
       total_credits: 20,
       used_credits: 0,
       available_credits: 20,
+      isGuest: true,
     }, { status: 200 });
   }
 }

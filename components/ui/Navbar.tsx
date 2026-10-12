@@ -5,7 +5,6 @@ import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, useRef } from "react";
 import {
-  Compass,
   LogOut,
   Terminal,
   Settings,
@@ -16,6 +15,7 @@ import {
 import { toast } from "sonner";
 import { CreditBalance } from "@/components/credits/CreditBalance";
 import { NotificationCenter } from "@/components/ui/NotificationCenter";
+import { AppLogo } from "@/components/ui/AppLogo";
 import {
   getActiveUser,
   getAllAccounts,
@@ -102,12 +102,7 @@ export function Navbar() {
   return (
     <header className="sticky top-0 z-40 border-b border-[#e5e7eb] bg-white/95 backdrop-blur">
       <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-4 px-4">
-        <Link href="/" className="flex items-center gap-2 text-sm font-medium">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-white shadow-2xs">
-            <Compass className="h-4 w-4" />
-          </span>
-          <span className="font-bold text-neutral-900 tracking-tight">FreelanceFind</span>
-        </Link>
+        <AppLogo href="/" size="sm" />
 
         <nav className="hidden items-center gap-1 md:flex">
           {NAV_LINKS.map((link) => {

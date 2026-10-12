@@ -1,7 +1,16 @@
+import { Metadata } from "next";
 import { Suspense } from "react";
 import SignupForm from "./SignupForm";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = {
+  title: "Create Account",
+  description: "Sign up for LeadScout with 20 free discovery credits. Find freelance clients who need websites, Instagram growth, and digital fixes.",
+  alternates: {
+    canonical: "https://leadscout-ashy.vercel.app/signup",
+  },
+};
 
 export default function SignupPage() {
   return (

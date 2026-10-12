@@ -19,15 +19,15 @@ export function Pricing() {
       annualMonthlyPrice: 0,
       badge: 'Starter',
       subtitle: 'Forever free to test LeadScout',
-      description: 'Ideal for trying out the scanner on local niche businesses.',
+      description: 'Ideal for testing the scanner and generating initial pitches with zero commitment.',
       features: [
-        '20 discovery credits included',
-        '~2 complete business scans',
-        'Google Maps local search',
-        'Basic AI gap analysis',
-        '3 personalized pitches per lead',
-        'Standard search filters',
-        'No credit card required',
+        '20 discovery credits included upon signup',
+        'Run up to 2 instant searches (10 credits each)',
+        'Or 1 full deep audit with tailored outreach pitches',
+        'Google Maps local search & gap detection',
+        'Instagram social presence check',
+        'Basic AI gap analysis & email/DM drafts',
+        'Standard search filters & zero card required',
       ],
       cta: 'Start with 20 Free Credits',
       href: '/signup',
@@ -44,7 +44,7 @@ export function Pricing() {
       description: 'Perfect for solo freelancers pitching 10-15 prospects weekly.',
       features: [
         '300 credits replenished every month',
-        '~12 deep client searches',
+        '~12-15 deep client searches',
         'Google Maps & Instagram deep scan',
         'Full AI Gap Analyzer',
         'Personalized multi-angle pitches',
@@ -66,7 +66,7 @@ export function Pricing() {
       description: 'Scale outreach with custom AI tones, filters, and rollover.',
       features: [
         '1,000 credits replenished every month',
-        '~40 deep client searches',
+        '~40-50 deep client searches',
         'Everything in Freelancer',
         'Unlimited Gap Analyzer reports',
         'Custom AI prompts & tone presets',
@@ -77,6 +77,29 @@ export function Pricing() {
       cta: 'Start Growth Plan',
       href: '/signup?plan=growth',
       highlighted: true,
+    },
+    {
+      id: 'agency',
+      name: 'AGENCY',
+      credits: '2,500 credits/mo',
+      monthlyPrice: 99,
+      annualMonthlyPrice: 79,
+      badge: 'Agency & Teams',
+      subtitle: 'High-volume scouting & team seats',
+      description: 'Built for agencies and power prospectors running daily outreach sprints.',
+      features: [
+        '2,500 credits replenished every month',
+        '~100+ deep client searches',
+        'Up to 5 team member seats included',
+        'Everything in Growth tier',
+        'Unlimited Gap Analyzer reports',
+        'Priority Apify proxy queue',
+        'Unused credit rollover (up to 1,500)',
+        'Dedicated onboarding & account support',
+      ],
+      cta: 'Start Agency Plan',
+      href: '/signup?plan=agency',
+      highlighted: false,
     },
   ]
 
@@ -217,7 +240,7 @@ export function Pricing() {
 
         {/* VIEW 1: SUBSCRIPTION PLANS */}
         {billingTab === 'subscription' && (
-          <div className="grid md:grid-cols-3 gap-6 items-stretch mb-12 max-w-5xl mx-auto">
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 items-stretch mb-12 max-w-7xl mx-auto">
             {subscriptionPlans.map((plan) => {
               const displayPrice = billingInterval === 'year' ? plan.annualMonthlyPrice : plan.monthlyPrice
               return (

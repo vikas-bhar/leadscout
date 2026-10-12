@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { AppLogo } from '@/components/ui/AppLogo'
 
 export function Footer() {
   return (
@@ -11,12 +12,9 @@ export function Footer() {
           
           {/* Col 1 */}
           <div className="col-span-2 md:col-span-1">
-            <Link href="/" className="flex items-center gap-2.5 font-bold text-lg text-white mb-4">
-              <span className="flex items-center justify-center w-7 h-7 rounded-lg bg-blue-600 text-white text-sm">
-                🎯
-              </span>
-              <span>LeadScout</span>
-            </Link>
+            <div className="mb-4">
+              <AppLogo href="/" size="md" theme="dark" />
+            </div>
             <p className="text-xs text-gray-500 mb-4 leading-relaxed">
               AI client finder for freelancers. Scan Google Maps, analyze digital gaps, and close more deals.
             </p>
@@ -54,8 +52,8 @@ export function Footer() {
             <ul className="space-y-2.5 text-xs">
               <li><Link href="/privacy" className="hover:text-white transition-colors">Privacy Policy</Link></li>
               <li><Link href="/terms" className="hover:text-white transition-colors">Terms of Service</Link></li>
-              <li><Link href="/privacy" className="hover:text-white transition-colors">Cookie Policy</Link></li>
-              <li><a href="mailto:officalleadscout@gmail.com" className="hover:text-white transition-colors">Support & Contact</a></li>
+              <li><Link href="/privacy#cookies" className="hover:text-white transition-colors">Cookie Policy</Link></li>
+              <li><a href="mailto:support@leadscout.app" className="hover:text-white transition-colors">Support & Contact</a></li>
             </ul>
           </div>
 

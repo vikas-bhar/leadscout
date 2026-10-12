@@ -3,7 +3,7 @@ import { DiagnosticLogsView } from "@/components/admin/DiagnosticLogsView";
 import { Navbar } from "@/components/ui/Navbar";
 
 export const metadata: Metadata = {
-  title: "Scraper Diagnostics | FreelanceFind Admin",
+  title: "Scraper Diagnostics | LeadScout Admin",
   description: "Internal diagnostic logging, raw HTML response inspector, and extraction error analysis.",
 };
 

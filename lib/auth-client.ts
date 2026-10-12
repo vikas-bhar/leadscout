@@ -15,6 +15,7 @@ export interface UserAccount {
   bio?: string;
   role: "freelancer" | "agency" | "admin";
   subscriptionPlan?: "free" | "freelancer" | "growth" | "agency";
+  password?: string;
   createdAt: string;
   lastLoginAt: string;
 }
@@ -148,7 +149,6 @@ export function setActiveUser(user: UserAccount): void {
 
 export async function loginUser(
   email: string,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   password?: string
 ): Promise<{ success: boolean; user?: UserAccount; error?: string }> {
   const cleanEmail = email.trim().toLowerCase();
@@ -157,13 +157,27 @@ export async function loginUser(
   }
 
   const accounts = getAllAccounts();
-  let user = accounts.find((a) => a.email.toLowerCase() === cleanEmail);
+  const user = accounts.find((a) => a.email.toLowerCase() === cleanEmail);
+
+  // If user has a set password, verify it strictly
+  if (user && user.password) {
+    if (!password) {
+      return { success: false, error: "Please enter your password to sign in." };
+    }
+    if (user.password !== password) {
+      return { success: false, error: "Incorrect password. Please verify your credentials or click Forgot Password." };
+    }
+  }
 
   if (!user) {
-    // Auto-create account if logging in with new email
+    // If new user logging in directly, require valid password (min 6 chars)
+    if (password && password.length < 6) {
+      return { success: false, error: "Password must be at least 6 characters long." };
+    }
+
     const namePart = cleanEmail.split("@")[0] || "User";
     const formattedName = namePart.charAt(0).toUpperCase() + namePart.slice(1);
-    user = {
+    const newUser: UserAccount = {
       id: `usr_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
       email: cleanEmail,
       fullName: formattedName,
@@ -171,29 +185,52 @@ export async function loginUser(
       freelancerType: "web_designer",
       skills: ["Outreach", "Audit", "Strategy"],
       role: "freelancer",
+      password: password || undefined,
       createdAt: new Date().toISOString(),
       lastLoginAt: new Date().toISOString(),
     };
-    accounts.push(user);
+    accounts.push(newUser);
     saveAllAccounts(accounts);
+    setActiveUser(newUser);
+
+    // Ensure starter balance
+    const balance = getLocalBalance();
+    if (!balance || (balance.availableCredits ?? 0) === 0) {
+      setLocalBalance({
+        totalCredits: 20,
+        usedCredits: 0,
+        availableCredits: 20,
+      });
+    }
+
+    return { success: true, user: newUser };
   } else {
     user.lastLoginAt = new Date().toISOString();
+    if (password && !user.password) {
+      user.password = password;
+    }
     saveAllAccounts(accounts);
+    setActiveUser(user);
+    return { success: true, user };
   }
+}
 
-  setActiveUser(user);
-
-  // Ensure starter balance
-  const balance = getLocalBalance();
-  if (!balance || (balance.availableCredits ?? 0) === 0) {
-    setLocalBalance({
-      totalCredits: 20,
-      usedCredits: 0,
-      availableCredits: 20,
-    });
+export async function resetPassword(
+  email: string,
+  newPassword?: string
+): Promise<{ success: boolean; message: string }> {
+  const cleanEmail = email.trim().toLowerCase();
+  if (!cleanEmail) {
+    return { success: false, message: "Please provide an email address." };
   }
-
-  return { success: true, user };
+  const accounts = getAllAccounts();
+  const user = accounts.find((a) => a.email.toLowerCase() === cleanEmail);
+  if (user && newPassword) {
+    user.password = newPassword;
+    saveAllAccounts(accounts);
+    return { success: true, message: "Password updated successfully. You can now sign in." };
+  }
+  return { success: true, message: `If an account exists for ${cleanEmail}, password reset instructions have been sent.` };
 }
 
 export async function signUpUser(
@@ -201,13 +238,18 @@ export async function signUpUser(
   fullName: string,
   agencyName?: string,
   freelancerType?: string,
-  plan?: "free" | "freelancer" | "growth" | "agency"
+  plan?: "free" | "freelancer" | "growth" | "agency",
+  password?: string
 ): Promise<{ success: boolean; user?: UserAccount; error?: string }> {
   const cleanEmail = email.trim().toLowerCase();
   const cleanName = fullName.trim();
 
   if (!cleanEmail || !cleanName) {
     return { success: false, error: "Please enter your name and email." };
+  }
+
+  if (password && password.length < 6) {
+    return { success: false, error: "Password must be at least 6 characters long." };
   }
 
   const accounts = getAllAccounts();
@@ -218,6 +260,7 @@ export async function signUpUser(
     if (agencyName) existing.agencyName = agencyName;
     if (freelancerType) existing.freelancerType = freelancerType;
     if (plan) existing.subscriptionPlan = plan;
+    if (password) existing.password = password;
     existing.lastLoginAt = new Date().toISOString();
     saveAllAccounts(accounts);
     setActiveUser(existing);
@@ -234,6 +277,7 @@ export async function signUpUser(
     skills: ["Client Outreach", "Digital Gap Analysis", "Pitches"],
     role: "freelancer",
     subscriptionPlan: selectedPlan,
+    password: password || undefined,
     createdAt: new Date().toISOString(),
     lastLoginAt: new Date().toISOString(),
   };

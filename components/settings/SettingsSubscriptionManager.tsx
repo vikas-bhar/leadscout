@@ -141,15 +141,15 @@ export function SettingsSubscriptionManager() {
           <div>
             <p className="text-xs font-bold text-neutral-900 dark:text-white">Official Support Email</p>
             <a
-              href="mailto:officalleadscout@gmail.com"
+              href="mailto:support@leadscout.app"
               className="text-xs text-blue-600 dark:text-blue-400 font-semibold hover:underline"
             >
-              officalleadscout@gmail.com
+              support@leadscout.app
             </a>
             <p className="text-[11px] text-neutral-400 mt-0.5">Average response time: &lt; 2 hours</p>
           </div>
           <a
-            href="mailto:officalleadscout@gmail.com?subject=LeadScout%20Support%20Request"
+            href="mailto:support@leadscout.app?subject=LeadScout%20Support%20Request"
             className="inline-flex items-center justify-center px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-xs transition-colors shrink-0"
           >
             Email Support →

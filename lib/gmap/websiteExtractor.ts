@@ -1,8 +1,53 @@
+export const SOCIAL_AND_AGGREGATOR_DOMAINS = new Set([
+  "facebook.com",
+  "fb.com",
+  "m.facebook.com",
+  "instagram.com",
+  "linktr.ee",
+  "linktree.com",
+  "bio.link",
+  "beacons.ai",
+  "taplink.cc",
+  "campsite.bio",
+  "lnk.bio",
+  "wa.me",
+  "whatsapp.com",
+  "tiktok.com",
+  "tripadvisor.com",
+  "yelp.com",
+  "zomato.com",
+  "swiggy.com",
+  "justdial.com",
+  "yellowpages.com",
+  "business.site",
+]);
+
+/**
+ * Checks if a given website URL is actually a social media page, link-in-bio, or directory profile
+ * rather than a dedicated business website.
+ */
+export function isSocialOrAggregatorUrl(url: string | null | undefined): boolean {
+  if (!url) return false;
+  try {
+    const normalized = url.startsWith("http") ? url : `https://${url}`;
+    const parsed = new URL(normalized);
+    const host = parsed.hostname.toLowerCase().replace(/^www\./, "");
+    for (const d of SOCIAL_AND_AGGREGATOR_DOMAINS) {
+      if (host === d || host.endsWith(`.${d}`)) {
+        return true;
+      }
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 export function extractWebsite(raw: Record<string, unknown> | null | undefined): string | null {
   if (!raw || typeof raw !== "object") return null;
 
   // Google Maps API / Apify use many different field names
-  // Check every single candidate
+  // Check every candidate
   const candidates = [
     raw.website,
     raw.websiteUrl,
@@ -58,8 +103,18 @@ export function extractWebsite(raw: Record<string, unknown> | null | undefined):
   return null;
 }
 
+/**
+ * Returns the website ONLY if it is an actual dedicated website (not Facebook, Linktree, Instagram, etc.).
+ */
+export function extractDedicatedWebsite(raw: Record<string, unknown> | null | undefined): string | null {
+  const url = extractWebsite(raw);
+  if (!url) return null;
+  if (isSocialOrAggregatorUrl(url)) return null;
+  return url;
+}
+
 export function hasRealWebsite(raw: Record<string, unknown> | null | undefined): boolean {
-  return extractWebsite(raw) !== null;
+  return extractDedicatedWebsite(raw) !== null;
 }
 
 // Log all website-related fields for debugging

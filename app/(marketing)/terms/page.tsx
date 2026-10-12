@@ -1,10 +1,13 @@
 import { Metadata } from "next";
 import Link from "next/link";
-import { FileText, ArrowLeft } from "lucide-react";
+import { FileText, ArrowLeft, AlertCircle, Scale, ShieldCheck } from "lucide-react";
 
 export const metadata: Metadata = {
-  title: "Terms of Service | LeadScout",
-  description: "Terms and conditions governing the use of LeadScout lead generation software and subscription credits.",
+  title: "Terms of Service",
+  description: "Terms and conditions governing the use of LeadScout lead generation software, subscriptions, and AI pitch drafting tools.",
+  alternates: {
+    canonical: "https://leadscout-ashy.vercel.app/terms",
+  },
 };
 
 export default function TermsOfServicePage() {
@@ -22,52 +25,93 @@ export default function TermsOfServicePage() {
         <div className="space-y-2">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 text-xs font-semibold">
             <FileText className="w-3.5 h-3.5" />
-            Terms of Use
+            Terms of Use & Legal Agreement
           </div>
           <h1 className="text-3xl font-extrabold tracking-tight">Terms of Service</h1>
-          <p className="text-xs text-neutral-400">Last updated: September 2026</p>
+          <p className="text-xs text-neutral-400">Last updated: October 2026</p>
         </div>
 
-        <div className="prose prose-sm dark:prose-invert space-y-6 text-xs text-neutral-600 dark:text-neutral-300 leading-relaxed">
+        <div className="prose prose-sm dark:prose-invert space-y-8 text-xs text-neutral-600 dark:text-neutral-300 leading-relaxed">
           <section className="space-y-2">
             <h2 className="text-sm font-bold text-neutral-900 dark:text-white">1. Agreement to Terms</h2>
             <p>
-              By accessing or utilizing LeadScout (&quot;the Service&quot;), you agree to be bound by these Terms of Service. If you do not agree to these terms, please do not use our prospecting and AI pitch generation tools.
+              By accessing, browsing, or utilizing LeadScout (&quot;the Service&quot;), you enter into a legally binding agreement with LeadScout and agree to adhere to these Terms of Service. If you do not accept these terms, you must immediately discontinue use of the platform.
             </p>
           </section>
 
           <section className="space-y-2">
-            <h2 className="text-sm font-bold text-neutral-900 dark:text-white">2. Credits, Subscriptions & Billing</h2>
+            <h2 className="text-sm font-bold text-neutral-900 dark:text-white">2. Plan Tiers, Credits & Billing</h2>
             <p>
               LeadScout operates on a credit-based prospecting system:
             </p>
             <ul className="list-disc pl-5 space-y-1">
-              <li>One-time credit purchases never expire and remain in your account until consumed.</li>
-              <li>Monthly subscriptions (Freelancer, Growth, Agency) refill your monthly credit quota at each billing cycle.</li>
-              <li>Subscriptions can be cancelled at any time through the in-app billing manager or Stripe Customer Portal. You retain full access to your plan benefits until the end of your prepaid billing period.</li>
+              <li><strong>Free Starter Tier:</strong> Includes 20 free discovery credits upon signup to explore the platform and run initial test scans without a credit card.</li>
+              <li><strong>Pay-As-You-Go Credit Packs:</strong> One-time credit top-up packages (Starter 100 credits, Pro 600 credits, Agency 2,000 credits) never expire and remain in your wallet until consumed.</li>
+              <li><strong>Monthly Subscriptions:</strong> Includes <strong>Freelancer</strong> ($19/mo, 300 credits), <strong>Growth</strong> ($49/mo, 1,000 credits with rollover up to 500 unused credits), and <strong>Agency</strong> ($99/mo, 2,500 credits with multi-seat access and rollover up to 1,500 credits). Subscriptions automatically replenish on each monthly billing date.</li>
+              <li><strong>Cancellations:</strong> You can cancel recurring subscriptions at any time via the Settings billing portal. You will retain full access through the remainder of your paid billing term.</li>
             </ul>
           </section>
 
           <section className="space-y-2">
-            <h2 className="text-sm font-bold text-neutral-900 dark:text-white">3. Acceptable Use Policy</h2>
+            <h2 className="text-sm font-bold text-neutral-900 dark:text-white flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-amber-500" />
+              3. Public Directory Data & Platform Compliance Disclaimer
+            </h2>
             <p>
-              Users agree to conduct outreach in compliance with regional regulations (such as CAN-SPAM, GDPR, and CASL). LeadScout provides cold outreach pitch drafts for informational and productivity purposes; users are responsible for final message sending and respecting recipient communication preferences.
+              LeadScout aggregates publicly accessible business listings and public social presence endpoints to identify digital opportunities. You understand and acknowledge:
+            </p>
+            <ul className="list-disc pl-5 space-y-1">
+              <li>Public directory listings, phone numbers, ratings, and social links originate from third-party services. While we strive for high freshness, LeadScout makes no warranty that all public listings or audit metrics are 100% error-free, uninterrupted, or current.</li>
+              <li>LeadScout provides AI-assisted pitch suggestions and gap detection as productivity aids. Users retain exclusive discretion over whether and how they contact prospective businesses.</li>
+              <li>Users are solely responsible for ensuring that their direct communications and cold outreach campaigns comply with applicable local telecommunications, consumer protection, and marketing regulations (including CAN-SPAM, GDPR, UK PECR, UAE telecommunications laws, and CASL).</li>
+            </ul>
+          </section>
+
+          <section className="space-y-2">
+            <h2 className="text-sm font-bold text-neutral-900 dark:text-white">4. Acceptable Use Policy</h2>
+            <p>
+              You agree not to use the Service to:
+            </p>
+            <ul className="list-disc pl-5 space-y-1">
+              <li>Harass, abuse, or send unsolicited mass spam in violation of regional anti-spam statutes.</li>
+              <li>Reverse engineer, decompile, or attempt to extract the underlying source code of our API services or scraping algorithms.</li>
+              <li>Resell raw database access or redistribute unauthenticated bulk exports without an enterprise partnership agreement.</li>
+            </ul>
+          </section>
+
+          <section className="space-y-2">
+            <h2 className="text-sm font-bold text-neutral-900 dark:text-white flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4 text-blue-600" />
+              5. Limitation of Liability
+            </h2>
+            <p>
+              To the maximum extent permitted by applicable law, in no event shall LeadScout, its owners, directors, affiliates, or licensors be liable for any indirect, incidental, special, exemplary, consequential, or punitive damages, including loss of profits, revenues, business opportunities, goodwill, or data, arising from or related to your use of or inability to use the Service. In all circumstances, LeadScout&apos;s total aggregate liability under these terms shall be limited to the greater of $100 or the total fees paid by you to LeadScout in the preceding twelve (12) months.
             </p>
           </section>
 
           <section className="space-y-2">
-            <h2 className="text-sm font-bold text-neutral-900 dark:text-white">4. Refund Policy</h2>
+            <h2 className="text-sm font-bold text-neutral-900 dark:text-white flex items-center gap-2">
+              <Scale className="w-4 h-4 text-blue-600" />
+              6. Governing Law & Jurisdiction
+            </h2>
             <p>
-              In the event that a prospecting search encounters technical failure or does not return valid data, credits used for that operation are automatically refunded to your balance. For subscription or billing disputes, please reach out to our concierge support team.
+              These Terms and any dispute or claim arising out of or related to them shall be governed by and construed in accordance with the laws of the State of Delaware, United States, without giving effect to any principles of conflicts of law. For international users operating in the UK, European Union, or UAE, nothing in these terms shall deprive you of mandatory consumer protections provided by your home jurisdiction.
             </p>
           </section>
 
           <section className="space-y-2">
-            <h2 className="text-sm font-bold text-neutral-900 dark:text-white">5. Contact Information</h2>
+            <h2 className="text-sm font-bold text-neutral-900 dark:text-white">7. Refund Policy</h2>
             <p>
-              For legal inquiries, billing questions, or support assistance, contact us at:{" "}
-              <a href="mailto:officalleadscout@gmail.com" className="text-blue-600 dark:text-blue-400 font-semibold hover:underline">
-                officalleadscout@gmail.com
+              We provide 20 free test credits so you can thoroughly evaluate the tool prior to subscribing. In the event of confirmed service outages or technical delivery failures on credit packs, refund requests submitted within 7 days of purchase to our support team will be promptly reviewed and credited.
+            </p>
+          </section>
+
+          <section className="space-y-2">
+            <h2 className="text-sm font-bold text-neutral-900 dark:text-white">8. Contact Information</h2>
+            <p>
+              Questions regarding these Terms of Service may be addressed to our legal desk at:{" "}
+              <a href="mailto:support@leadscout.app" className="text-blue-600 dark:text-blue-400 font-semibold hover:underline">
+                support@leadscout.app
               </a>.
             </p>
           </section>

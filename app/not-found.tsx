@@ -1,12 +1,13 @@
 import Link from "next/link";
-import { ArrowLeft, Compass } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
+import { AppLogo } from "@/components/ui/AppLogo";
 
 export default function NotFound() {
   return (
     <main className="min-h-screen bg-gray-50 flex items-center justify-center px-4 py-12">
       <div className="max-w-md w-full bg-white border border-gray-200 rounded-2xl p-8 text-center shadow-lg">
-        <div className="w-14 h-14 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-5 shadow-xs">
-          <Compass className="w-7 h-7" />
+        <div className="flex justify-center mb-5">
+          <AppLogo href="/" size="xl" />
         </div>
         <h1 className="text-xl font-bold text-gray-900 mb-2">Page Not Found</h1>
         <p className="text-sm text-gray-500 mb-6">

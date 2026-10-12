@@ -1,7 +1,16 @@
+import { Metadata } from "next";
 import { Suspense } from "react";
 import LoginPage from "./LoginForm";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = {
+  title: "Sign In",
+  description: "Sign in to LeadScout to access your AI lead intelligence dashboard, prospect audits, and saved lead lists.",
+  alternates: {
+    canonical: "https://leadscout-ashy.vercel.app/login",
+  },
+};
 
 export default function Page() {
   return (

@@ -36,10 +36,10 @@ export default function PaymentCancelledPage() {
         <p className="text-[11px] text-gray-400 pt-2">
           Questions or need help? Contact{" "}
           <a
-            href="mailto:officalleadscout@gmail.com"
+            href="mailto:support@leadscout.app"
             className="text-blue-600 hover:underline font-medium"
           >
-            officalleadscout@gmail.com
+            support@leadscout.app
           </a>
         </p>
       </div>

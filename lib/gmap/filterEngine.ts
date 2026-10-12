@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { SearchFilters, InstagramFilters } from "@/types";
-import { extractWebsite } from "./websiteExtractor";
+import { extractWebsite, isSocialOrAggregatorUrl } from "./websiteExtractor";
 
 export interface FilterResult {
   passed: any[];
@@ -79,6 +79,13 @@ export function applyFilters(
     const name = business.title || business.name || "";
     const website = extractWebsite(business);
     const hasWebsite = website !== null;
+    const isSocialOnly = isSocialOrAggregatorUrl(website);
+    const hasDedicatedWebsite = hasWebsite && !isSocialOnly;
+
+    if (isSocialOnly) {
+      business.isSocialOnlyWebsite = true;
+      business.websiteNote = "Social profile or Linktree only (No dedicated website)";
+    }
 
     const rating =
       parseFloat(
@@ -123,18 +130,19 @@ export function applyFilters(
 
     // ── WEBSITE FILTER ───────────────────────
 
-    // User wants ONLY businesses with NO website
+    // User wants ONLY businesses with NO dedicated website
+    // (Businesses with NO website OR whose website is merely Facebook/Linktree/Instagram will pass!)
     if (f.requireNoWebsite === true) {
-      if (hasWebsite) {
-        reject(business, `has_website: ${website}`);
+      if (hasDedicatedWebsite) {
+        reject(business, `has_dedicated_website: ${website}`);
         continue;
       }
     }
 
-    // User wants ONLY businesses WITH a website
+    // User wants ONLY businesses WITH a dedicated website
     if (f.requireWebsite === true) {
-      if (!hasWebsite) {
-        reject(business, "no_website");
+      if (!hasDedicatedWebsite) {
+        reject(business, isSocialOnly ? "social_only_no_real_website" : "no_website");
         continue;
       }
     }

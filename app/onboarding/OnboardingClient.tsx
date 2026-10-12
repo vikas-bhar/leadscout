@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ArrowRight, Check } from 'lucide-react'
 import { toast } from 'sonner'
+import { AppLogo } from '@/components/ui/AppLogo'
 
 export function OnboardingClient() {
   const router = useRouter()
@@ -34,6 +35,10 @@ export function OnboardingClient() {
   return (
     <main className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-2xl mx-auto w-full">
+        <div className="flex justify-center mb-6">
+          <AppLogo href="/" size="lg" />
+        </div>
+
         {/* Progress Bar */}
         <div className="mb-8">
           <div className="flex items-center justify-between text-xs font-semibold text-gray-500 mb-2">

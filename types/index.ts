@@ -1,4 +1,4 @@
-export const SUPPORT_EMAIL = "officalleadscout@gmail.com";
+export const SUPPORT_EMAIL = "support@leadscout.app";
 
 export type FreelancerType =
   | "social_media_manager"

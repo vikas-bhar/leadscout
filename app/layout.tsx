@@ -106,10 +106,6 @@ export const metadata: Metadata = {
       { url: '/apple-icon.png', sizes: '180x180' },
     ],
   },
-
-  verification: {
-    google: 'your-google-verification-code',
-  },
 }
 
 export const dynamic = "force-dynamic";

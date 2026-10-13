@@ -10,6 +10,23 @@ export const metadata: Metadata = {
   alternates: {
     canonical: "https://leadscout-ashy.vercel.app/login",
   },
+  openGraph: {
+    title: "Sign In | LeadScout",
+    description: "Sign in to LeadScout to access your AI lead intelligence dashboard, prospect audits, and saved lead lists.",
+    url: "https://leadscout-ashy.vercel.app/login",
+    siteName: "LeadScout",
+    images: ["/og-image.png"],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Sign In | LeadScout",
+    description: "Sign in to LeadScout to access your AI lead intelligence dashboard, prospect audits, and saved lead lists.",
+    images: ["/og-image.png"],
+  },
+  robots: {
+    index: false,
+    follow: false,
+  },
 };
 
 export default function Page() {

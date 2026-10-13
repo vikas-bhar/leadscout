@@ -129,7 +129,7 @@ Cheers,
             See it in action
           </h2>
           <p className="text-base sm:text-lg text-gray-600 dark:text-gray-400">
-            Illustrative examples from live business scans — click any card to inspect the real AI pitch draft
+            Example leads and sample AI pitches. Sign up to run a live scan.
           </p>
         </div>
 

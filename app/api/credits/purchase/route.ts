@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
             unit_amount: unitAmount,
             product_data: {
               name: customCredits ? `Custom Flexible Pack — ${credits} credits ($0.10/credit)` : `${pack.name} — ${credits} credits`,
-              description: "FreelanceFind credits never expire ($0.10 = 1 credit)",
+              description: "LeadScout top-up credits never expire ($0.10 = 1 credit)",
             },
           },
         },

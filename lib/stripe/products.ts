@@ -38,7 +38,7 @@ export const STRIPE_PRODUCTS: {
       bonusCredits: 0,
       price: 9,
       priceId: process.env.STRIPE_STARTER_PRICE_ID || "price_starter_placeholder",
-      description: "100 credits, never expire",
+      description: "100 credits, top-up credits never expire",
     },
     pro: {
       id: "pro",

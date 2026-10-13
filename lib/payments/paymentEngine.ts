@@ -115,7 +115,7 @@ export async function createCreditCheckout(
             unit_amount: Math.round(pack.price * 100),
             product_data: {
               name: `${pack.name} — ${pack.credits} Credits`,
-              description: "Credits never expire",
+              description: "Top-up credits never expire",
             },
           },
           quantity: 1,

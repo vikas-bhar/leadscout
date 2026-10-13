@@ -477,7 +477,7 @@ export function CreditsView({
                   Buy Custom Credits on Demand
                 </h3>
                 <p className="text-xs text-neutral-600 dark:text-neutral-300 leading-relaxed">
-                  Need a specific amount? Choose exactly how many credits you need at a flat rate of <strong>$0.10 per credit</strong>. Never expire!
+                  Need a specific amount? Choose exactly how many credits you need at a flat rate of <strong>$0.10 per credit</strong>. Top-up credits never expire!
                 </p>
               </div>
 
@@ -549,7 +549,7 @@ export function CreditsView({
                           <span>{totalCredits.toLocaleString()} Credits Total</span>
                         </div>
                         <div className="text-[11px] text-neutral-500 mt-0.5">
-                          ${(pkg.price / totalCredits).toFixed(3)} per credit • Never expire
+                          ${(pkg.price / totalCredits).toFixed(3)} per credit • Top-up credits never expire
                         </div>
                       </div>
 

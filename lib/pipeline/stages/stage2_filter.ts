@@ -1,6 +1,6 @@
 import { MapsResult } from "./stage1_maps";
 import { PIPELINE_CONFIG } from "../config";
-import { isValidWebsiteUrl } from "../cleaner";
+import { hasRealWebsite } from "@/lib/website-filter";
 
 export interface FilteredBusiness extends MapsResult {
   gaps: {
@@ -21,7 +21,7 @@ export function filterAndScore(businesses: MapsResult[]): FilteredBusiness[] {
   }
 
   const scored = businesses.map((b) => {
-    const hasValidWeb = Boolean(b.website && isValidWebsiteUrl(b.website));
+    const hasValidWeb = hasRealWebsite(b.website);
     const gaps = {
       noWebsite: !hasValidWeb,
       lowRating: b.rating !== null && b.rating < 4.2,

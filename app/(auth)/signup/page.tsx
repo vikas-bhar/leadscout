@@ -10,6 +10,23 @@ export const metadata: Metadata = {
   alternates: {
     canonical: "https://leadscout-ashy.vercel.app/signup",
   },
+  openGraph: {
+    title: "Create Account | LeadScout",
+    description: "Sign up for LeadScout with 20 free discovery credits. Find freelance clients who need websites, Instagram growth, and digital fixes.",
+    url: "https://leadscout-ashy.vercel.app/signup",
+    siteName: "LeadScout",
+    images: ["/og-image.png"],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Create Account | LeadScout",
+    description: "Sign up for LeadScout with 20 free discovery credits. Find freelance clients who need websites, Instagram growth, and digital fixes.",
+    images: ["/og-image.png"],
+  },
+  robots: {
+    index: false,
+    follow: false,
+  },
 };
 
 export default function SignupPage() {

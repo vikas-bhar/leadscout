@@ -490,7 +490,7 @@ export function SearchForm() {
                 This search costs
               </p>
               <p className="text-xs text-blue-500 mt-0.5">
-                Credits never expire
+                Top-up credits never expire
               </p>
             </div>
             <div className="text-right">

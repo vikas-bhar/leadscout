@@ -7,7 +7,20 @@ import { Footer } from '@/components/marketing/Footer'
 export const metadata = {
   title: 'Pricing — Subscription Plans & Credit Packs',
   description: 'Flexible subscriptions and pay-as-you-go credit packages for LeadScout. Free plan with 20 credits. Monthly subscriptions from $19/mo with auto-refilling credits, or one-time packs from $9.',
-  alternates: { canonical: 'https://leadscout-ashy.vercel.app/pricing' }
+  alternates: { canonical: 'https://leadscout-ashy.vercel.app/pricing' },
+  openGraph: {
+    title: 'Pricing — Subscription Plans & Credit Packs | LeadScout',
+    description: 'Flexible subscriptions and pay-as-you-go credit packages for LeadScout. Free plan with 20 credits. Monthly subscriptions from $19/mo with auto-refilling credits, or one-time packs from $9.',
+    url: 'https://leadscout-ashy.vercel.app/pricing',
+    siteName: 'LeadScout',
+    images: ['/og-image.png'],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Pricing — Subscription Plans & Credit Packs | LeadScout',
+    description: 'Flexible subscriptions and pay-as-you-go credit packages for LeadScout. Free plan with 20 credits. Monthly subscriptions from $19/mo with auto-refilling credits, or one-time packs from $9.',
+    images: ['/og-image.png'],
+  },
 }
 
 export default function PricingPage() {

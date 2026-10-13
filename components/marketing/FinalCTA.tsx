@@ -63,7 +63,7 @@ export function FinalCTA() {
           </div>
           <div className="flex items-center gap-1.5">
             <Coins className="w-4 h-4 text-blue-300" />
-            <span>Credits never expire</span>
+            <span>Top-up credits never expire</span>
           </div>
         </div>
 

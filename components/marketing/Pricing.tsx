@@ -115,7 +115,7 @@ export function Pricing() {
         '~5 deep prospect searches',
         'Google Maps scanning',
         'AI gap audits & pitch drafts',
-        'Credits never expire',
+        'Top-up credits never expire',
         'One-time payment, no recurring charge',
       ],
       cta: 'Buy Starter Pack',
@@ -136,7 +136,7 @@ export function Pricing() {
         'Instagram social presence audit',
         'Gap Analyzer feature unlocked',
         'CSV export capability',
-        'Credits never expire',
+        'Top-up credits never expire',
       ],
       cta: 'Buy Pro Pack',
       href: '/signup',
@@ -154,7 +154,7 @@ export function Pricing() {
         '3 team member access',
         'Full Gap Analyzer access',
         'Direct CSV exports',
-        'Credits never expire',
+        'Top-up credits never expire',
       ],
       cta: 'Buy Agency Pack',
       href: '/signup',
@@ -177,7 +177,7 @@ export function Pricing() {
             Subscription plans built for client acquisition
           </h2>
           <p className="text-base sm:text-lg text-gray-600 dark:text-gray-300">
-            Choose a recurring subscription for monthly auto-refills and advanced AI features, or pick a one-time credit pack that never expires.
+            Choose a recurring subscription for monthly auto-refills and advanced AI features, or pick a one-time credit pack where top-up credits never expire.
           </p>
         </div>
 

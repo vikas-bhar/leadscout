@@ -1,26 +1,19 @@
-export const SOCIAL_AND_AGGREGATOR_DOMAINS = new Set([
-  "facebook.com",
-  "fb.com",
-  "m.facebook.com",
-  "instagram.com",
-  "linktr.ee",
-  "linktree.com",
-  "bio.link",
-  "beacons.ai",
-  "taplink.cc",
-  "campsite.bio",
-  "lnk.bio",
-  "wa.me",
-  "whatsapp.com",
-  "tiktok.com",
-  "tripadvisor.com",
-  "yelp.com",
-  "zomato.com",
-  "swiggy.com",
-  "justdial.com",
-  "yellowpages.com",
-  "business.site",
-]);
+import {
+  hasNoWebsite as checkHasNoWebsite,
+  hasRealWebsite as checkHasRealWebsite,
+  NON_WEBSITE_DOMAINS_AND_PATTERNS,
+  normalizeWebsiteUrlForFilter,
+} from "@/lib/website-filter";
+
+export {
+  NON_WEBSITE_DOMAINS_AND_PATTERNS,
+  normalizeWebsiteUrlForFilter,
+  checkHasNoWebsite as hasNoWebsite,
+};
+
+export const SOCIAL_AND_AGGREGATOR_DOMAINS = new Set(
+  NON_WEBSITE_DOMAINS_AND_PATTERNS.filter((d) => !d.includes("/"))
+);
 
 /**
  * Checks if a given website URL is actually a social media page, link-in-bio, or directory profile
@@ -28,19 +21,8 @@ export const SOCIAL_AND_AGGREGATOR_DOMAINS = new Set([
  */
 export function isSocialOrAggregatorUrl(url: string | null | undefined): boolean {
   if (!url) return false;
-  try {
-    const normalized = url.startsWith("http") ? url : `https://${url}`;
-    const parsed = new URL(normalized);
-    const host = parsed.hostname.toLowerCase().replace(/^www\./, "");
-    for (const d of SOCIAL_AND_AGGREGATOR_DOMAINS) {
-      if (host === d || host.endsWith(`.${d}`)) {
-        return true;
-      }
-    }
-    return false;
-  } catch {
-    return false;
-  }
+  // If url is not empty, check if it's considered "NO website"
+  return checkHasNoWebsite(url);
 }
 
 export function extractWebsite(raw: Record<string, unknown> | null | undefined): string | null {
@@ -109,11 +91,14 @@ export function extractWebsite(raw: Record<string, unknown> | null | undefined):
 export function extractDedicatedWebsite(raw: Record<string, unknown> | null | undefined): string | null {
   const url = extractWebsite(raw);
   if (!url) return null;
-  if (isSocialOrAggregatorUrl(url)) return null;
+  if (checkHasNoWebsite(url)) return null;
   return url;
 }
 
-export function hasRealWebsite(raw: Record<string, unknown> | null | undefined): boolean {
+export function hasRealWebsite(raw: Record<string, unknown> | string | null | undefined): boolean {
+  if (typeof raw === "string" || raw === null || raw === undefined) {
+    return checkHasRealWebsite(raw);
+  }
   return extractDedicatedWebsite(raw) !== null;
 }
 

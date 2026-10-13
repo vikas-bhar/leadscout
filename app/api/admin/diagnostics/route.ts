@@ -3,10 +3,14 @@ import {
   getDiagnosticLogs,
   clearDiagnosticLogs,
 } from "@/lib/diagnostic-logger";
+import { requireApiUser } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
+  const auth = await requireApiUser();
+  if (!auth.user) return auth.response;
+
   try {
     const { searchParams } = new URL(req.url);
     const type = searchParams.get("type") || "all";
@@ -32,6 +36,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function DELETE() {
+  const auth = await requireApiUser();
+  if (!auth.user) return auth.response;
+
   try {
     clearDiagnosticLogs();
     return NextResponse.json({ success: true, message: "Diagnostic logs cleared" });

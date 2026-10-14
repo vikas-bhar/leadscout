@@ -3,14 +3,10 @@ import { detectLinkType } from "@/lib/analyzer/detectLink";
 import { scrapeLinkData } from "@/lib/analyzer/scrapeLink";
 import { parseWebsiteScrapedHtml } from "@/lib/scraper-utils";
 import { recordDiagnosticLog, type ValidationTraceStep } from "@/lib/diagnostic-logger";
-import { requireApiUser } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
-  const auth = await requireApiUser();
-  if (!auth.user) return auth.response;
-
   const startTime = Date.now();
   let targetUrl = "";
   const validationTrace: ValidationTraceStep[] = [];

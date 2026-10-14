@@ -1,14 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { handleMCPRequest, MCP_TOOLS, MCP_RESOURCES, MCP_PROMPTS } from "@/lib/mcp";
-import { requireApiUser } from "@/lib/supabase";
 
 export async function POST(req: NextRequest) {
-  const auth = await requireApiUser();
-  if (!auth.user) return auth.response;
-
   try {
     const body = await req.json();
 
+    // Check if it's a batch of JSON-RPC requests or a single request
     if (Array.isArray(body)) {
       const results = await Promise.all(body.map((r) => handleMCPRequest(r)));
       return NextResponse.json(results);
@@ -33,15 +30,13 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET() {
-  const auth = await requireApiUser();
-  if (!auth.user) return auth.response;
-
+  // Returns server capability manifest & available tools
   return NextResponse.json({
     status: "online",
-    name: "LeadScout MCP Server",
+    name: "FreelanceFind MCP Server",
     version: "1.0.0",
     protocolVersion: "2024-11-05",
-    description: "Model Context Protocol interface for LeadScout Lead Discovery & AI Pitch Automation.",
+    description: "Model Context Protocol interface for FreelanceFind Lead Discovery & AI Pitch Automation.",
     endpoints: {
       jsonRpc: "/api/mcp",
     },
